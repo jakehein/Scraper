@@ -8,6 +8,7 @@
 const messageType = {
   scrapePage: 'scrapePage',
   downloadContentJSON: 'downloadContentJSON',
+  test: 'test',
 };
 
 const scrapedHtml = document.getElementById("scraper");
@@ -17,6 +18,8 @@ scrapedHtml.addEventListener('click', async () => {
   chrome.runtime.sendMessage({ message: messageType.scrapePage }, (response) => {
     console.log(response.status);
   });
+  // THIS IS THE TEST FOR CONTENT_SCRIPT
+  chrome.runtime.sendMessage({ message: messageType.test });
 });
 
 downloadedContents.addEventListener('click', async () => {

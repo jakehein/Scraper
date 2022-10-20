@@ -10,9 +10,24 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://yugioh.fandom.com/wiki/*"
+      ],
+      "js": [
+        "node_modules/jquery/dist/jquery.min.js",
+        "content-script.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
   "optional_permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "notifications",
+    "tabs"
   ],
   "host_permissions": [
     "https://yugioh.fandom.com/wiki/*"
