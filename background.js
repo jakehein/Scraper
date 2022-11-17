@@ -6,7 +6,7 @@ const messageType = {
 };
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('this is a test')
+  console.log('installed');
   // var popup = document.getElementById('myPopup');
   // popup.innerHTML = `Nope. Go to ${ygoWiki} to start scraping!`;
 });
@@ -30,7 +30,7 @@ chrome.runtime.onMessage.addListener(
         });
         break;
       case messageType.test:
-        console.log(sender)
+        console.log(sender, " from background")
         await chrome.tabs.sendMessage(
           sender.id,
           { message: messageType.test }
@@ -40,12 +40,12 @@ chrome.runtime.onMessage.addListener(
     }
 });
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.message === 'test'){
-    chrome.notifications.create({
-      "type": "basic",
-      "title": "this is a test",
-      "message": message.message
-    });
-  }
-});
+// chrome.runtime.onMessage.addListener((message) => {
+//   if (message.message === 'test'){
+//     chrome.notifications.create({
+//       "type": "basic",
+//       "title": "this is a test",
+//       "message": message.message
+//     });
+//   }
+// });

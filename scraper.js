@@ -16,7 +16,7 @@ const downloadedContents = document.getElementById("contents");
 
 scrapedHtml.addEventListener('click', async () => {
   chrome.runtime.sendMessage({ message: messageType.scrapePage }, (response) => {
-    console.log(response.status);
+    console.log(response.status, ' from scraper.js');
   });
   // THIS IS THE TEST FOR CONTENT_SCRIPT
   chrome.runtime.sendMessage({ message: messageType.test });

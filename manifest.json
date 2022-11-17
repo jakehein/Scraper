@@ -1,6 +1,6 @@
 {
-  "name": "Yu-Gi-Oh Scraper Extention",
-  "description": "Scrape shit for use in YGO-ED",
+  "name": "Yu-Gi-Oh Scraper Extension",
+  "description": "Scrape shit for use in YGO-EDS",
   "version": "1.0",
   "manifest_version": 3,
   "action": {
@@ -31,5 +31,10 @@
   ],
   "host_permissions": [
     "https://yugioh.fandom.com/wiki/*"
-  ]
+  ],
+  "icons": {
+    "16": "puzzle-image.png",
+    "48": "puzzle-image.png",
+    "128": "puzzle-image.png"
+  }
 }
