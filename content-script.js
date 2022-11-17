@@ -3,9 +3,9 @@
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.message === 'test') {
-    console.log('content script')  
+    console.log('content script');
     chrome.runtime.sendMessage({
-      "message": 'test message from content script'
+      message: 'test message from content script',
     });
   }
 });
