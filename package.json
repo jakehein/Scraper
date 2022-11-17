@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "jquery": "^3.6.1"
+    "@types/chrome": "^0.0.202",
+    "jquery": "^3.6.1",
+    "types": "^0.1.1"
   }
 }
