@@ -1,0 +1,39 @@
+{
+  "name": "Yu-Gi-Oh Scraper Extension",
+  "description": "Scrape shit for use in YGO-EDS",
+  "version": "1.0",
+  "manifest_version": 3,
+  "action": {
+    "default_popup": "scraper.html",
+    "default_icon": "puzzle-image.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://yugioh.fandom.com/wiki/*(EDS-BP)"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
+  "optional_permissions": [
+    "storage",
+    "activeTab",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://yugioh.fandom.com/wiki/*"
+  ],
+  "icons": {
+    "16": "puzzle-image.png",
+    "48": "puzzle-image.png",
+    "128": "puzzle-image.png"
+  }
+}
