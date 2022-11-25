@@ -32,109 +32,171 @@ enum Rarity {
 	Common = 'Common',
 }
 
+interface CardData {
+	cardId: string;
+	cardName: string;
+	cardDescription: string | number;
+	boosterPack: BoosterPack;
+	cardType: string | number;
+	rarity: Rarity;
+}
+
+// Useful Constants
+const xpathUnlockCondition =
+	'//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
+const xpathDescription =
+	'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div/i/a[contains(text(),"The Eternal Duelist Soul")]';
+const xpathCardType =
+	'//a[contains(text(),"Card type")]/../following-sibling::td/a';
+const headingId = '#firstHeading';
+const packSuffix = '(EDS-BP)';
+const packImg = 'div > figure > a.image';
+const cardDescriptionTd = 'tr:nth-child(3) > td';
+const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
+const launcherSpiderBoosterPage =
+	'https://yugioh.fandom.com/wiki/Launcher_Spider_(EDS-BP)';
+
 window.onload = () => {
 	const button = document.createElement('button');
 	button.id = 'scrapePage';
 	button.textContent = 'Scrape Page';
 
-	document.querySelector('#firstHeading').parentElement.append(button);
+	document.querySelector(headingId).parentElement.append(button);
 
 	button.addEventListener('click', () => {
 		//scrapePage();
-		scrapeBoosterPage();
+		checkAndScrapeBoosterPage();
+		//scrapeBoosterPage();
 		button.textContent = 'Page Scraped!';
 		button.disabled = true;
 	});
 };
 
+function checkAndScrapeBoosterPage() {
+	if (document.location.href === launcherSpiderBoosterPage) {
+		scrapeLauncherSpiderBoosterPage();
+	} else {
+		scrapeBoosterPage();
+	}
+}
+
+function scrapeLauncherSpiderBoosterPage() {}
+
 // FOR TESTING...
 // https://yugioh.fandom.com/wiki/Dark_Magician_(EDS-BP)
-function scrapeBoosterPage() {
+async function scrapeBoosterPage() {
 	// booster pack name
-	const boosterNameElement = document.querySelector(
-		'#firstHeading',
-	) as HTMLElement;
+	const boosterNameElement = document.querySelector(headingId) as HTMLElement;
 	const boosterName = boosterNameElement.innerText
-		.replace('(EDS-BP)', '')
+		.replace(packSuffix, '')
 		.trim();
 
 	// booster unlock condition
-	const xpathUnlockCondition =
-		'//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
 	const unlockCondition = (
 		evaluateElement(document, xpathUnlockCondition) as HTMLElement
 	)?.innerText;
-	//const boosterUnlockConditionElement = document.querySelector() as HTMLElement;
-	const img = document.querySelector(
-		'div > figure > a.image',
-	) as HTMLAnchorElement;
+
+	const img = document.querySelector(packImg) as HTMLAnchorElement;
 	const imgLink = img.href;
+
 	//TODO: need to get the rarity of the card from the page here
-	const cardRarity: string = 'Rare';
-	//TODO: need to get the actual card URL here
-	const cardURL: string = 'https://yugioh.fandom.com/wiki/Beast_Fangs';
 
-	if (!Object.values(Rarity).includes(cardRarity as Rarity)) {
-		alert(
-			`Rarity ${cardRarity} is not an accepted Rarity type. Big oops on the devs part. Bad Dev, Bad!`,
-		);
-		return;
-	} else if (!Object.values(BoosterPack).includes(boosterName as BoosterPack)) {
-		alert(
-			`BoosterPack ${boosterName} is not an accepted BoosterPack type. Big oops on the devs part. Bad Dev, Bad!`,
-		);
-		return;
+	// const xpathUnlockCondition =
+	// '//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
+
+	// deck details tr
+	//const xpathDeckDetails = '//*[@id="mw-content-text"]/div/table[2]/tbody/tr[5]/th';
+	//TODO: check this against blue-eyes ultimate dragon booster page
+	const xpathDeckDetails =
+		'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
+	const deckDetails = (
+		evaluateElement(document, xpathDeckDetails) as HTMLElement
+	)?.children;
+
+	const cardDataCollection: CardData[] = [];
+
+	for (let i = 0; i < deckDetails.length - 1; i++) {
+		const pElement = deckDetails.item(i);
+		const ulElement = deckDetails.item(i + 1);
+		const cardsCollection = ulElement.children;
+
+		if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
+			const cardRarity = (pElement as HTMLElement).innerText.trim();
+			for (let j = 0; j < cardsCollection.length; j++) {
+				const currentCard = cardsCollection.item(j) as HTMLElement;
+				const cardName = currentCard.innerText.trim();
+				const cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
+					?.href;
+
+				if (!Object.values(Rarity).includes(cardRarity as Rarity)) {
+					console.log(
+						`Rarity ${cardRarity} is not an accepted Rarity type. Big oops on the devs part. Bad Dev, Bad!`,
+					);
+					return;
+				} else if (
+					!Object.values(BoosterPack).includes(boosterName as BoosterPack)
+				) {
+					console.log(
+						`BoosterPack ${boosterName} is not an accepted BoosterPack type. Big oops on the devs part. Bad Dev, Bad!`,
+					);
+					return;
+				}
+
+				//BOOSETER TEST
+				const cardData = await getCardInfo(
+					cardName,
+					cardURL,
+					boosterName as BoosterPack,
+					cardRarity as Rarity,
+				);
+
+				cardDataCollection.push(cardData);
+			}
+		}
 	}
+	console.log(boosterName);
+	console.log(unlockCondition);
+	console.log(imgLink);
+	console.log(cardDataCollection);
+	//console.log(boosterName, '\n', unlockCondition, '\n', imgLink, '\n');
 
-	//TODO: get first element in list of cards and get info from card?
-	//BOOSETER TEST
-	getCardInfo(cardURL, boosterName as BoosterPack, cardRarity as Rarity);
-
-	console.log(boosterName, '\n', unlockCondition, '\n', imgLink, '\n');
+	//const cardRarity: string = 'Rare';
+	//TODO: need to get the actual card URL here
+	//const cardURL: string = 'https://yugioh.fandom.com/wiki/Beast_Fangs';
 }
 
 // TODO: Thinking I'll hit this from the booster pack page, passing in the pack info to make a card
 // The cardID might be "boosterNameCardName" or something
-function scrapePage(
+function scrapeCardPage(
 	pageDocument: Document,
+	cardName: string,
 	boosterPack: BoosterPack,
 	rarity: Rarity,
 ) {
 	//get Card Name from header of DOM
-	const cardNameElement = pageDocument.querySelector(
-		'#firstHeading',
-	) as HTMLElement;
-	const cardName = cardNameElement ? cardNameElement.innerText.trim() : -1;
-	//(cardName as string).replace('(EDS-BP)', '').trim();
+	//const cardNameElement = pageDocument.querySelector(headingId) as HTMLElement;
+	//const cardName = cardNameElement ? cardNameElement.innerText.trim() : -1;
 
 	//get Card Description from DOM
-	const xpathDescription =
-		'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div/i/a[contains(text(),"The Eternal Duelist Soul")]';
 	const descriptionNode = (
 		evaluateElement(pageDocument, xpathDescription) as Element
 	)?.closest('tbody');
 	const cardDescriptionElement = descriptionNode?.querySelector(
-		'tr:nth-child(3) > td',
+		cardDescriptionTd,
 	) as HTMLElement;
 	const cardDescription = cardDescriptionElement
 		? cardDescriptionElement.innerText.trim()
 		: -1;
 
 	// get card type node on DOM
-	var xpathCardType =
-		'//a[contains(text(),"Card type")]/../following-sibling::td/a';
 	const cardTypeElement = evaluateElement(
 		pageDocument,
 		xpathCardType,
 	) as HTMLElement;
-	let cardType = cardTypeElement ? cardTypeElement.innerText.trim() : -1;
+	const cardType = cardTypeElement ? cardTypeElement.innerText.trim() : -1;
+	const cardId = `${cardName}-${boosterPack}`;
 
-	// console log everything
-	console.log(cardName);
-	console.log(cardDescription);
-	console.log(boosterPack);
-	console.log(cardType);
-	console.log(rarity);
+	return { cardId, cardName, cardDescription, boosterPack, cardType, rarity };
 }
 
 //TODO: decide if this should be called once per string or pass all strings of card into this one time
@@ -147,7 +209,6 @@ function errorHandleStrings(
 	cardDescription: string;
 	cardType: string;
 } {
-	//TODO: if str is -1, say what the card was and what got goofed
 	if (cardName === -1 || cardDescription === -1 || cardType === -1) {
 		console.log(
 			'Error with card: ',
@@ -176,22 +237,25 @@ function evaluateElement(pageDocument: Document, xpath: string) {
 	).singleNodeValue;
 }
 
-function getCardInfo(
+async function getCardInfo(
+	cardName: string,
 	url: RequestInfo | URL,
 	boosterPackName: BoosterPack,
 	rarity: Rarity,
 ) {
-	fetch(url)
+	let cardData: CardData;
+	await fetch(url)
 		.then((resp) => resp.text())
 		.then((result) => {
-			//console.log(result);
-			scrapePage(
+			cardData = scrapeCardPage(
 				new DOMParser().parseFromString(result, 'text/html'),
+				cardName,
 				boosterPackName,
 				rarity,
 			);
 		})
-		.catch((e) => alert(`Card Info could not be retrieved: ${e}`));
+		.catch((e) => console.log(`Card Info could not be retrieved: ${e}`));
+	return cardData;
 }
 
 function downloadImage(url: RequestInfo | URL, name: string) {
@@ -208,5 +272,5 @@ function downloadImage(url: RequestInfo | URL, name: string) {
 			a.click();
 			window.URL.revokeObjectURL(url);
 		})
-		.catch(() => alert('An error sorry'));
+		.catch(() => console.log('An error sorry'));
 }

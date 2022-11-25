@@ -22,7 +22,7 @@
       "all_frames": false
     }
   ],
-  "optional_permissions": [
+  "permissions": [
     "storage",
     "activeTab",
     "notifications",
