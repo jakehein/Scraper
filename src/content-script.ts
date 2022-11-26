@@ -44,13 +44,16 @@ interface CardData {
 // Useful Constants
 const xpathUnlockCondition =
 	'//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
-const xpathDescription =
+const xpathCardDescriptionEDS =
 	'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div/i/a[contains(text(),"The Eternal Duelist Soul")]';
+const xpathCardDescription =
+	'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div[contains(text(),"English")]';
 const xpathCardType =
 	'//a[contains(text(),"Card type")]/../following-sibling::td/a';
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
 const packImg = 'div > figure > a.image';
+const packImgLauncherSpider = 'div > aside > figure > a.image';
 const cardDescriptionTd = 'tr:nth-child(3) > td';
 const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
 const launcherSpiderBoosterPage =
@@ -80,10 +83,47 @@ function checkAndScrapeBoosterPage() {
 	}
 }
 
-function scrapeLauncherSpiderBoosterPage() {}
+async function scrapeLauncherSpiderBoosterPage() {
+	const boosterCardRows = document
+		.getElementById('Top_table')
+		.getElementsByTagName('tbody')[0].children;
+	const boosterName = BoosterPack.LauncherSpider;
+	const unlockCondition =
+		'The Launcher Spider Booster Pack is unlocked by defeating Mai Valentine 20 times';
 
-// FOR TESTING...
-// https://yugioh.fandom.com/wiki/Dark_Magician_(EDS-BP)
+	const img = document.querySelector(
+		packImgLauncherSpider,
+	) as HTMLAnchorElement;
+	const imgLink = img.href;
+	const cardDataCollection: CardData[] = [];
+
+	for (let i = 0; i < boosterCardRows.length; i++) {
+		const currentCardRow = (boosterCardRows.item(i) as HTMLElement).children;
+		const cardName = (currentCardRow.item(0) as HTMLElement)?.innerText
+			.trim()
+			.replace(/\"/g, '');
+		const cardRarity =
+			(currentCardRow.item(1) as HTMLElement)?.innerText === Rarity.Common
+				? Rarity.Common
+				: Rarity.Rare;
+		const cardURL = ygoFandomSite.concat(cardName.replace(/ /g, '_'));
+
+		const cardData = await getCardInfo(
+			cardName,
+			cardURL,
+			boosterName,
+			cardRarity,
+		);
+
+		cardDataCollection.push(cardData);
+	}
+
+	console.log(boosterName);
+	console.log(unlockCondition);
+	console.log(imgLink);
+	console.log(cardDataCollection);
+}
+
 async function scrapeBoosterPage() {
 	// booster pack name
 	const boosterNameElement = document.querySelector(headingId) as HTMLElement;
@@ -99,13 +139,6 @@ async function scrapeBoosterPage() {
 	const img = document.querySelector(packImg) as HTMLAnchorElement;
 	const imgLink = img.href;
 
-	//TODO: need to get the rarity of the card from the page here
-
-	// const xpathUnlockCondition =
-	// '//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
-
-	// deck details tr
-	//const xpathDeckDetails = '//*[@id="mw-content-text"]/div/table[2]/tbody/tr[5]/th';
 	//TODO: check this against blue-eyes ultimate dragon booster page
 	const xpathDeckDetails =
 		'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
@@ -173,20 +206,30 @@ function scrapeCardPage(
 	boosterPack: BoosterPack,
 	rarity: Rarity,
 ) {
-	//get Card Name from header of DOM
-	//const cardNameElement = pageDocument.querySelector(headingId) as HTMLElement;
-	//const cardName = cardNameElement ? cardNameElement.innerText.trim() : -1;
-
 	//get Card Description from DOM
-	const descriptionNode = (
-		evaluateElement(pageDocument, xpathDescription) as Element
+	let descriptionNode = (
+		evaluateElement(pageDocument, xpathCardDescriptionEDS) as Element
 	)?.closest('tbody');
-	const cardDescriptionElement = descriptionNode?.querySelector(
+	let cardDescriptionElement = descriptionNode?.querySelector(
 		cardDescriptionTd,
 	) as HTMLElement;
-	const cardDescription = cardDescriptionElement
+	let cardDescription = cardDescriptionElement
 		? cardDescriptionElement.innerText.trim()
 		: -1;
+
+	if (cardDescription === -1) {
+		descriptionNode = (
+			evaluateElement(pageDocument, xpathCardDescription) as Element
+		)?.closest('tbody');
+		console.log(descriptionNode);
+		cardDescriptionElement = descriptionNode?.querySelector(
+			cardDescriptionTd,
+		) as HTMLElement;
+		console.log(cardDescriptionElement);
+		cardDescription = cardDescriptionElement
+			? cardDescriptionElement.innerText.trim()
+			: -1;
+	}
 
 	// get card type node on DOM
 	const cardTypeElement = evaluateElement(
