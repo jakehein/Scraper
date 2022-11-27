@@ -32,13 +32,34 @@ enum Rarity {
 	Common = 'Common',
 }
 
-interface CardData {
-	cardId: string;
-	cardName: string;
-	cardDescription: string | number;
+interface ICardData {
+	id: string;
+	name: string;
+	description: string | number;
 	boosterPack: BoosterPack;
 	cardType: string | number;
 	rarity: Rarity;
+	imgLink: string | URL;
+}
+
+interface IBoosterPackData {
+	id: string;
+	name: string;
+	unlockCondition: string;
+	imgLink: string | URL;
+	cardIds: string[];
+	redeemed: number;
+}
+
+//TODO: need to check if this exists in all cases where I'd be manipulating it in storage,
+// if not, instantiate and then manip/save
+interface IContentStorageData {
+	cards: ICardData[];
+	boosterPacks: IBoosterPackData[];
+	starterDecks: IBoosterPackData[];
+	weeklySets: IBoosterPackData[];
+	magazines: IBoosterPackData[];
+	grandpaCupSets: IBoosterPackData[];
 }
 
 // Useful Constants
@@ -58,8 +79,9 @@ const cardDescriptionTd = 'tr:nth-child(3) > td';
 const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
 const launcherSpiderBoosterPage =
 	'https://yugioh.fandom.com/wiki/Launcher_Spider_(EDS-BP)';
+const localStorageKey = 'Yu-Gi-Oh EDS Scraper Data';
 
-window.onload = () => {
+window.onload = async () => {
 	const button = document.createElement('button');
 	button.id = 'scrapePage';
 	button.textContent = 'Scrape Page';
@@ -67,12 +89,24 @@ window.onload = () => {
 	document.querySelector(headingId).parentElement.append(button);
 
 	button.addEventListener('click', () => {
-		//scrapePage();
 		checkAndScrapeBoosterPage();
-		//scrapeBoosterPage();
 		button.textContent = 'Page Scraped!';
 		button.disabled = true;
 	});
+
+	const extensionStorage = (await chrome.storage.local.get(
+		localStorageKey,
+	)) as IContentStorageData;
+	if (!extensionStorage?.cards?.length) {
+		chrome.storage.local.set(
+			{ localStorageKey: {} as IContentStorageData },
+			() => {
+				console.log(
+					'Created new empty ContentStorageData object for Yu-Gi-Oh EDS Scraper',
+				);
+			},
+		);
+	}
 };
 
 function checkAndScrapeBoosterPage() {
@@ -83,6 +117,7 @@ function checkAndScrapeBoosterPage() {
 	}
 }
 
+// this should probaly be future proofed, in the event other pages follow suit...
 async function scrapeLauncherSpiderBoosterPage() {
 	const boosterCardRows = document
 		.getElementById('Top_table')
@@ -95,7 +130,7 @@ async function scrapeLauncherSpiderBoosterPage() {
 		packImgLauncherSpider,
 	) as HTMLAnchorElement;
 	const imgLink = img.href;
-	const cardDataCollection: CardData[] = [];
+	const cardDataCollection: ICardData[] = [];
 
 	for (let i = 0; i < boosterCardRows.length; i++) {
 		const currentCardRow = (boosterCardRows.item(i) as HTMLElement).children;
@@ -125,6 +160,13 @@ async function scrapeLauncherSpiderBoosterPage() {
 }
 
 async function scrapeBoosterPage() {
+	const cardDataCollection: ICardData[] = [];
+	const cardIds: string[] = [];
+
+	const contentStorageData = (await chrome.storage.local.get(
+		localStorageKey,
+	)) as IContentStorageData;
+
 	// booster pack name
 	const boosterNameElement = document.querySelector(headingId) as HTMLElement;
 	const boosterName = boosterNameElement.innerText
@@ -139,14 +181,11 @@ async function scrapeBoosterPage() {
 	const img = document.querySelector(packImg) as HTMLAnchorElement;
 	const imgLink = img.href;
 
-	//TODO: check this against blue-eyes ultimate dragon booster page
 	const xpathDeckDetails =
 		'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 	const deckDetails = (
 		evaluateElement(document, xpathDeckDetails) as HTMLElement
 	)?.children;
-
-	const cardDataCollection: CardData[] = [];
 
 	for (let i = 0; i < deckDetails.length - 1; i++) {
 		const pElement = deckDetails.item(i);
@@ -175,7 +214,6 @@ async function scrapeBoosterPage() {
 					return;
 				}
 
-				//BOOSETER TEST
 				const cardData = await getCardInfo(
 					cardName,
 					cardURL,
@@ -184,28 +222,60 @@ async function scrapeBoosterPage() {
 				);
 
 				cardDataCollection.push(cardData);
+				cardIds.push(cardData.id);
 			}
 		}
 	}
-	console.log(boosterName);
-	console.log(unlockCondition);
-	console.log(imgLink);
-	console.log(cardDataCollection);
-	//console.log(boosterName, '\n', unlockCondition, '\n', imgLink, '\n');
 
-	//const cardRarity: string = 'Rare';
-	//TODO: need to get the actual card URL here
-	//const cardURL: string = 'https://yugioh.fandom.com/wiki/Beast_Fangs';
+	if (!contentStorageData?.cards?.length) {
+		contentStorageData.cards = [];
+	}
+	if (!contentStorageData?.boosterPacks?.length) {
+		contentStorageData.boosterPacks = [];
+	}
+
+	//FIXME: push isn't working right, switch to concat and do something like check val ?? new val concatted or something idk
+	contentStorageData.cards.push(...cardDataCollection);
+	contentStorageData.boosterPacks.push({
+		id: boosterName,
+		name: boosterName,
+		imgLink: imgLink,
+		redeemed: 0,
+		unlockCondition: unlockCondition,
+		cardIds: cardIds,
+	});
+	console.log(contentStorageData);
+
+	//const updatedContentStorageData = contentStorageData;
+
+	//TODO: need to add this to launcher spider
+	chrome.storage.local.set(
+		{
+			localStorageKey: contentStorageData,
+		},
+		() => {
+			console.log('localStorage updated');
+		},
+	);
+
+	const extensionStorage = chrome.storage.local.get(
+		localStorageKey,
+		(data: IContentStorageData) => {
+			console.log('got localStorage: ', data);
+		},
+	);
+	console.log(extensionStorage);
 }
 
-// TODO: Thinking I'll hit this from the booster pack page, passing in the pack info to make a card
-// The cardID might be "boosterNameCardName" or something
 function scrapeCardPage(
 	pageDocument: Document,
 	cardName: string,
 	boosterPack: BoosterPack,
 	rarity: Rarity,
 ) {
+	//unique cardId given name and boosterPack
+	const cardId = `${cardName}-${boosterPack}`;
+
 	//get Card Description from DOM
 	let descriptionNode = (
 		evaluateElement(pageDocument, xpathCardDescriptionEDS) as Element
@@ -237,9 +307,17 @@ function scrapeCardPage(
 		xpathCardType,
 	) as HTMLElement;
 	const cardType = cardTypeElement ? cardTypeElement.innerText.trim() : -1;
-	const cardId = `${cardName}-${boosterPack}`;
 
-	return { cardId, cardName, cardDescription, boosterPack, cardType, rarity };
+	// TODO: need to get all the other card props
+
+	return {
+		id: cardId,
+		name: cardName,
+		description: cardDescription,
+		boosterPack,
+		cardType,
+		rarity,
+	} as ICardData;
 }
 
 //TODO: decide if this should be called once per string or pass all strings of card into this one time
@@ -286,7 +364,7 @@ async function getCardInfo(
 	boosterPackName: BoosterPack,
 	rarity: Rarity,
 ) {
-	let cardData: CardData;
+	let cardData: ICardData;
 	await fetch(url)
 		.then((resp) => resp.text())
 		.then((result) => {
