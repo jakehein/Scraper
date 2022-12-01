@@ -1,6 +1,7 @@
 // TODO: add button to this list to grab ALL cards in one loop? Maybe get images this way...
 // https://yugioh.fandom.com/wiki/Gallery_of_Yu-Gi-Oh!_The_Eternal_Duelist_Soul_cards
 
+//#region Enums
 enum BoosterPack {
 	DarkMagician = 'Dark Magician',
 	MysticalElf = 'Mystical Elf',
@@ -31,7 +32,9 @@ enum Rarity {
 	Rare = 'Rare',
 	Common = 'Common',
 }
+//#endregion
 
+//#region Interfaces
 interface ICardData {
 	id: string;
 	name: string;
@@ -51,8 +54,6 @@ interface IBoosterPackData {
 	redeemed: number;
 }
 
-//TODO: need to check if this exists in all cases where I'd be manipulating it in storage,
-// if not, instantiate and then manip/save
 interface IContentStorageData {
 	cards: ICardData[];
 	boosterPacks: IBoosterPackData[];
@@ -61,8 +62,9 @@ interface IContentStorageData {
 	magazines: IBoosterPackData[];
 	grandpaCupSets: IBoosterPackData[];
 }
+//#endregion
 
-// Useful Constants
+//#region Useful Constants
 const xpathUnlockCondition =
 	'//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
 const xpathCardDescriptionEDS =
@@ -71,6 +73,8 @@ const xpathCardDescription =
 	'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div[contains(text(),"English")]';
 const xpathCardType =
 	'//a[contains(text(),"Card type")]/../following-sibling::td/a';
+const xpathDeckDetails =
+	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
 const packImg = 'div > figure > a.image';
@@ -79,13 +83,12 @@ const cardDescriptionTd = 'tr:nth-child(3) > td';
 const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
 const launcherSpiderBoosterPage =
 	'https://yugioh.fandom.com/wiki/Launcher_Spider_(EDS-BP)';
+//#endregion
 
 window.onload = async () => {
 	const button = document.createElement('button');
 	button.id = 'scrapePage';
 	button.textContent = 'Scrape Page';
-
-	document.querySelector(headingId).parentElement.append(button);
 
 	button.addEventListener('click', () => {
 		checkAndScrapeBoosterPage();
@@ -104,14 +107,7 @@ function checkBoosterPageStorage(button: HTMLButtonElement) {
 	chrome.storage.local.get(
 		'ygoKey',
 		(extensionStorage: { ygoKey: IContentStorageData }) => {
-			const storageDataInit: IContentStorageData = {
-				cards: [],
-				boosterPacks: [],
-				starterDecks: [],
-				weeklySets: [],
-				magazines: [],
-				grandpaCupSets: [],
-			};
+			const storageDataInit = getNewContentStorageDataInstance();
 			if (!extensionStorage?.ygoKey?.cards?.length) {
 				chrome.storage.local.set({ ygoKey: storageDataInit }, () => {
 					console.log(
@@ -143,11 +139,36 @@ function getBoosterName() {
 	return boosterName;
 }
 
+function getNewContentStorageDataInstance() {
+	return {
+		cards: [],
+		boosterPacks: [],
+		starterDecks: [],
+		weeklySets: [],
+		magazines: [],
+		grandpaCupSets: [],
+	} as IContentStorageData;
+}
+
+async function getLocalStorage() {
+	const localStorage = (await chrome.storage.local.get('ygoKey')) as {
+		ygoKey: IContentStorageData;
+	};
+	return localStorage?.ygoKey;
+}
+
+async function setLocalStorage(contents: IContentStorageData) {
+	await chrome.storage.local.set({
+		ygoKey: contents,
+	});
+}
+
 function disableScraperForPage(button: HTMLButtonElement) {
 	button.textContent = 'Page Scraped!';
 	button.disabled = true;
 }
 
+// this should probably be future proofed, in the event other pages follow suit...
 function checkAndScrapeBoosterPage() {
 	if (document.location.href === launcherSpiderBoosterPage) {
 		scrapeLauncherSpiderBoosterPage();
@@ -198,28 +219,9 @@ async function scrapeLauncherSpiderBoosterPage() {
 	console.log(cardDataCollection);
 }
 
-async function scrapeBoosterPage() {
-	//const cardDataCollection: ICardData[] = [];
-	const cardIds: string[] = [];
-	const pageContentStorageData: IContentStorageData = {
-		cards: [],
-		boosterPacks: [],
-		starterDecks: [],
-		weeklySets: [],
-		magazines: [],
-		grandpaCupSets: [],
-	};
-
-	const storageContentStorageData = (await chrome.storage.local.get(
-		'ygoKey',
-	)) as { ygoKey: IContentStorageData };
-	console.log('start: ', storageContentStorageData);
-
-	// booster pack name
-	//TODO: make all these functions
+function boosterPageContents() {
 	const boosterName = getBoosterName();
 
-	// booster unlock condition
 	const unlockCondition = (
 		evaluateElement(document, xpathUnlockCondition) as HTMLElement
 	)?.innerText;
@@ -227,12 +229,19 @@ async function scrapeBoosterPage() {
 	const img = document.querySelector(packImg) as HTMLAnchorElement;
 	const imgLink = img.href;
 
-	const xpathDeckDetails =
-		'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 	const deckDetails = (
 		evaluateElement(document, xpathDeckDetails) as HTMLElement
 	)?.children;
 
+	return { boosterName, unlockCondition, imgLink, deckDetails };
+}
+
+async function getCardDetails(
+	cardIds: string[],
+	pageContentStorageData: IContentStorageData,
+	boosterName: string,
+	deckDetails: HTMLCollection,
+) {
 	for (let i = 0; i < deckDetails.length - 1; i++) {
 		const pElement = deckDetails.item(i);
 		const ulElement = deckDetails.item(i + 1);
@@ -272,6 +281,24 @@ async function scrapeBoosterPage() {
 			}
 		}
 	}
+}
+
+async function scrapeBoosterPage() {
+	const cardIds: string[] = [];
+	const pageContentStorageData = getNewContentStorageDataInstance();
+
+	const storageContentStorageData = await getLocalStorage();
+
+	const { boosterName, unlockCondition, imgLink, deckDetails } =
+		boosterPageContents();
+
+	// update cardIds and pageContentStorageData
+	await getCardDetails(
+		cardIds,
+		pageContentStorageData,
+		boosterName,
+		deckDetails,
+	);
 
 	pageContentStorageData.boosterPacks.push({
 		id: boosterName,
@@ -283,54 +310,28 @@ async function scrapeBoosterPage() {
 	});
 
 	if (
-		!storageContentStorageData?.ygoKey?.cards?.length &&
-		!storageContentStorageData?.ygoKey?.boosterPacks?.length
+		!storageContentStorageData?.cards?.length &&
+		!storageContentStorageData?.boosterPacks?.length
 	) {
-		console.log('pageContentStorageData: ', pageContentStorageData);
-		chrome.storage.local.set(
-			{
-				ygoKey: pageContentStorageData,
-			},
-			() => {
-				console.log('added pageContent to localStorage');
-				chrome.storage.local.get(
-					'ygoKey',
-					(extensionStorage: { ygoKey: IContentStorageData }) => {
-						console.log('extensionStorage:', extensionStorage);
-					},
-				);
-			},
-		);
+		await setLocalStorage(pageContentStorageData);
 	} else {
 		const updatedContentStorageData: IContentStorageData = {
-			...storageContentStorageData.ygoKey,
-			cards: storageContentStorageData.ygoKey.cards.concat(
+			...storageContentStorageData,
+			cards: storageContentStorageData.cards.concat(
 				pageContentStorageData.cards,
 			),
-			boosterPacks: storageContentStorageData.ygoKey.boosterPacks.concat(
+			boosterPacks: storageContentStorageData.boosterPacks.concat(
 				pageContentStorageData.boosterPacks,
 			),
 		};
-		console.log('updatedContentStorageData: ', updatedContentStorageData);
-		chrome.storage.local.set(
-			{
-				ygoKey: updatedContentStorageData,
-			},
-			() => {
-				chrome.storage.local.get(
-					'ygoKey',
-					(extensionStorage: { ygoKey: IContentStorageData }) => {
-						console.log('extensionStorage:', extensionStorage);
-					},
-				);
-			},
-		);
+		await setLocalStorage(updatedContentStorageData);
 	}
 
+	// print to console new storage data contents
 	chrome.storage.local.get(
 		'ygoKey',
 		(extensionStorage: { ygoKey: IContentStorageData }) => {
-			console.log('extensionStorage:', extensionStorage);
+			console.log('extensionStorage:', extensionStorage?.ygoKey);
 		},
 	);
 }
