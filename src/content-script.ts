@@ -43,6 +43,8 @@ interface ICardData {
 	cardType: string | number;
 	rarity: Rarity;
 	imgLink: string | URL;
+	isFusionMonster: boolean;
+	isRitualMonster: boolean;
 }
 
 interface IBoosterPackData {
@@ -73,6 +75,8 @@ const xpathCardDescription =
 	'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div[contains(text(),"English")]';
 const xpathCardType =
 	'//a[contains(text(),"Card type")]/../following-sibling::td/a';
+const xpathType = '//a[contains(text(),"Type")]/../following-sibling::td';
+const xpathTypes = '//a[contains(text(),"Types")]/../following-sibling::td';
 const xpathDeckDetails =
 	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 const headingId = '#firstHeading';
@@ -96,7 +100,7 @@ window.onload = async () => {
 	});
 
 	//TODO: TEST, remove this
-	//await chrome.storage.local.clear();
+	await chrome.storage.local.clear();
 
 	checkBoosterPageStorage(button);
 
@@ -336,6 +340,25 @@ async function scrapeBoosterPage() {
 	);
 }
 
+function getCardDescription(pageDocument: Document, xpath: string) {
+	const descriptionNode = (
+		evaluateElement(pageDocument, xpath) as Element
+	)?.closest('tbody');
+	const cardDescriptionElement = descriptionNode?.querySelector(
+		cardDescriptionTd,
+	) as HTMLElement;
+	const cardDescription = cardDescriptionElement
+		? cardDescriptionElement.innerText.trim()
+		: '';
+	return cardDescription;
+}
+
+function getElementText(pageDocument: Document, xpath: string) {
+	const element = evaluateElement(pageDocument, xpath) as HTMLElement;
+	const elementText = element ? element.innerText.trim() : '';
+	return elementText;
+}
+
 function scrapeCardPage(
 	pageDocument: Document,
 	cardName: string,
@@ -345,39 +368,28 @@ function scrapeCardPage(
 	//unique cardId given name and boosterPack
 	const cardId = `${cardName}-${boosterPack}`;
 
-	//get Card Description from DOM
-	let descriptionNode = (
-		evaluateElement(pageDocument, xpathCardDescriptionEDS) as Element
-	)?.closest('tbody');
-	let cardDescriptionElement = descriptionNode?.querySelector(
-		cardDescriptionTd,
-	) as HTMLElement;
-	let cardDescription = cardDescriptionElement
-		? cardDescriptionElement.innerText.trim()
-		: -1;
+	let cardDescription = getCardDescription(
+		pageDocument,
+		xpathCardDescriptionEDS,
+	);
 
-	if (cardDescription === -1) {
-		descriptionNode = (
-			evaluateElement(pageDocument, xpathCardDescription) as Element
-		)?.closest('tbody');
-		console.log(descriptionNode);
-		cardDescriptionElement = descriptionNode?.querySelector(
-			cardDescriptionTd,
-		) as HTMLElement;
-		console.log(cardDescriptionElement);
-		cardDescription = cardDescriptionElement
-			? cardDescriptionElement.innerText.trim()
-			: -1;
+	if (!cardDescription) {
+		cardDescription = getCardDescription(pageDocument, xpathCardDescription);
 	}
 
-	// get card type node on DOM
-	const cardTypeElement = evaluateElement(
-		pageDocument,
-		xpathCardType,
-	) as HTMLElement;
-	const cardType = cardTypeElement ? cardTypeElement.innerText.trim() : -1;
+	const cardType = getElementText(pageDocument, xpathCardType);
+
+	let type = getElementText(pageDocument, xpathType);
+
+	if (!type) {
+		type = getElementText(pageDocument, xpathTypes);
+	}
 
 	// TODO: need to get all the other card props
+	let isFusionMonster =
+		cardType === 'Monster' && type.toLocaleLowerCase().includes('fusion');
+	let isRitualMonster =
+		cardType === 'Monster' && type.toLocaleLowerCase().includes('ritual');
 
 	return {
 		id: cardId,
@@ -386,6 +398,8 @@ function scrapeCardPage(
 		boosterPack,
 		cardType,
 		rarity,
+		isFusionMonster,
+		isRitualMonster,
 	} as ICardData;
 }
 
