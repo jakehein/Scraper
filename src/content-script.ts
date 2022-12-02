@@ -32,19 +32,80 @@ enum Rarity {
 	Rare = 'Rare',
 	Common = 'Common',
 }
+
+enum CardType {
+	Monster = 'Monster',
+	Spell = 'Spell',
+	Trap = 'Trap',
+}
+
+enum Property {
+	Normal = 'Normal',
+	Field = 'Field',
+	QuickPlay = 'Quick-Play',
+	Ritual = 'Ritual',
+	Continuous = 'Continuous',
+	Equip = 'Equip',
+	Counter = 'Counter',
+}
+
+enum MonsterType {
+	Normal = 'Normal',
+	Effect = 'Effect',
+	Fusion = 'Fusion',
+	Ritual = 'Ritual',
+	Aqua = 'Aqua',
+	Beast = 'Beast',
+	BeastWarrior = 'Beast-Warrior',
+	Dinosaur = 'Dinosaur',
+	DivineBeast = 'Divine-Beast',
+	Dragon = 'Dragon',
+	Fairy = 'Fairy',
+	Fiend = 'Fiend',
+	Fish = 'Fish',
+	Insect = 'Insect',
+	Machine = 'Machine',
+	Plant = 'Plant',
+	Pyro = 'Pyro',
+	Reptile = 'Reptile',
+	Rock = 'Rock',
+	SeaSerpent = 'Sea Serpent',
+	Spellcaster = 'Spellcaster',
+	Thunder = 'Thunder',
+	Warrior = 'Warrior',
+	WingedBeast = 'Winged Beast',
+	Zombie = 'Zombie',
+}
+
+enum Attribute {
+	Dark = 'DARK',
+	Divine = 'DIVINE',
+	Earth = 'EARTH',
+	Fire = 'FIRE',
+	Light = 'LIGHT',
+	Water = 'WATER',
+	Wind = 'WIND',
+}
 //#endregion
 
 //#region Interfaces
 interface ICardData {
 	id: string;
 	name: string;
-	description: string | number;
+	description: string;
 	boosterPack: BoosterPack;
-	cardType: string | number;
+	cardType: CardType;
 	rarity: Rarity;
-	imgLink: string | URL;
+	imgLink: RequestInfo | URL;
 	isFusionMonster: boolean;
 	isRitualMonster: boolean;
+	property?: Property;
+	passcode?: string;
+	monsterTypes?: MonsterType[];
+	atk?: string;
+	def?: string;
+	attribute?: Attribute;
+	level?: number;
 }
 
 interface IBoosterPackData {
@@ -77,17 +138,27 @@ const xpathCardType =
 	'//a[contains(text(),"Card type")]/../following-sibling::td/a';
 const xpathType = '//a[contains(text(),"Type")]/../following-sibling::td';
 const xpathTypes = '//a[contains(text(),"Types")]/../following-sibling::td';
+const xpathAtkDef = '//a[contains(text(),"ATK")]/../following-sibling::td';
+const xpathAttribute =
+	'//a[contains(text(),"Attribute")]/../following-sibling::td';
+const xpathLevel = '//a[contains(text(),"Level")]/../following-sibling::td';
+const xpathProperty =
+	'//a[contains(text(),"Property")]/../following-sibling::td';
+const xpathPasscode =
+	'//a[contains(text(),"Passcode")]/../following-sibling::td';
 const xpathDeckDetails =
 	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
 const packImg = 'div > figure > a.image';
+const cardImg = 'td.cardtable-cardimage > a.image';
 const packImgLauncherSpider = 'div > aside > figure > a.image';
 const cardDescriptionTd = 'tr:nth-child(3) > td';
 const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
 const launcherSpiderBoosterPage =
 	'https://yugioh.fandom.com/wiki/Launcher_Spider_(EDS-BP)';
 //#endregion
+let cardImgDocument: Document;
 
 window.onload = async () => {
 	const button = document.createElement('button');
@@ -105,6 +176,34 @@ window.onload = async () => {
 	checkBoosterPageStorage(button);
 
 	document.querySelector(headingId).parentElement.append(button);
+
+	//send to background
+	chrome.runtime.sendMessage({ message: 'cache' }, async (response) => {
+		console.log('response.response', response.response);
+		if (!response.response) {
+			chrome.runtime.sendMessage(
+				{
+					message:
+						//new XMLSerializer().serializeToString(
+						await getCardImgDocument(),
+					//),
+				},
+				(resp) => {
+					cardImgDocument = new DOMParser().parseFromString(
+						resp.response,
+						'text/html',
+					);
+					console.log('cardImgDocument', cardImgDocument);
+				},
+			);
+		} else {
+			cardImgDocument = new DOMParser().parseFromString(
+				response.response,
+				'text/html',
+			);
+		}
+		document.querySelector(headingId).parentElement.append(button);
+	});
 };
 
 function checkBoosterPageStorage(button: HTMLButtonElement) {
@@ -210,6 +309,7 @@ async function scrapeLauncherSpiderBoosterPage() {
 		const cardData = await getCardInfo(
 			cardName,
 			cardURL,
+			'',
 			boosterName,
 			cardRarity,
 		);
@@ -240,12 +340,24 @@ function boosterPageContents() {
 	return { boosterName, unlockCondition, imgLink, deckDetails };
 }
 
+function getCardImgXPath(cardText: string, isAltArtwork: boolean) {
+	let xpathCardImg = `//a[contains(text(), "${cardText}")]`;
+	if (isAltArtwork) {
+		xpathCardImg = xpathCardImg.concat(
+			'/../i/a[contains(text(), "Alternate artwork")]',
+		);
+	}
+	xpathCardImg = xpathCardImg.concat('/../../preceding-sibling::div/div/a');
+	return xpathCardImg;
+}
+
 async function getCardDetails(
 	cardIds: string[],
 	pageContentStorageData: IContentStorageData,
 	boosterName: string,
 	deckDetails: HTMLCollection,
 ) {
+	console.log(cardIds, pageContentStorageData, boosterName, deckDetails);
 	for (let i = 0; i < deckDetails.length - 1; i++) {
 		const pElement = deckDetails.item(i);
 		const ulElement = deckDetails.item(i + 1);
@@ -256,8 +368,22 @@ async function getCardDetails(
 			for (let j = 0; j < cardsCollection.length; j++) {
 				const currentCard = cardsCollection.item(j) as HTMLElement;
 				const cardName = currentCard.innerText.trim();
-				const cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
+				let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
 					?.href;
+				if (cardURL.includes('#')) {
+					cardURL = cardURL.replace(/#/g, '_');
+				}
+
+				const cardHasAlternateArtwork = cardName.includes('Alternate artwork');
+
+				console.log(cardImgDocument);
+				console.log(getCardImgXPath(cardName, cardHasAlternateArtwork));
+				const cardImgURL = (
+					evaluateElement(
+						cardImgDocument,
+						getCardImgXPath(cardName, cardHasAlternateArtwork),
+					) as HTMLAnchorElement
+				)?.href;
 
 				if (!Object.values(Rarity).includes(cardRarity as Rarity)) {
 					console.log(
@@ -276,10 +402,12 @@ async function getCardDetails(
 				const cardData = await getCardInfo(
 					cardName,
 					cardURL,
+					cardImgURL,
 					boosterName as BoosterPack,
 					cardRarity as Rarity,
 				);
 
+				console.log(cardData);
 				pageContentStorageData.cards.push(cardData);
 				cardIds.push(cardData.id);
 			}
@@ -296,6 +424,7 @@ async function scrapeBoosterPage() {
 	const { boosterName, unlockCondition, imgLink, deckDetails } =
 		boosterPageContents();
 
+	console.log(boosterName, unlockCondition, imgLink, deckDetails);
 	// update cardIds and pageContentStorageData
 	await getCardDetails(
 		cardIds,
@@ -355,7 +484,7 @@ function getCardDescription(pageDocument: Document, xpath: string) {
 
 function getElementText(pageDocument: Document, xpath: string) {
 	const element = evaluateElement(pageDocument, xpath) as HTMLElement;
-	const elementText = element ? element.innerText.trim() : '';
+	const elementText = element ? element.innerText.trim() : undefined;
 	return elementText;
 }
 
@@ -364,43 +493,83 @@ function scrapeCardPage(
 	cardName: string,
 	boosterPack: BoosterPack,
 	rarity: Rarity,
+	cardImgURL: RequestInfo | URL,
 ) {
-	//unique cardId given name and boosterPack
-	const cardId = `${cardName}-${boosterPack}`;
+	const cardData: ICardData = {
+		id: `${cardName}-${boosterPack}`,
+		name: cardName,
+		description: '',
+		boosterPack: boosterPack,
+		cardType: CardType.Monster,
+		rarity: rarity,
+		imgLink: cardImgURL,
+		isFusionMonster: false,
+		isRitualMonster: false,
+	};
 
-	let cardDescription = getCardDescription(
+	cardData.description = getCardDescription(
 		pageDocument,
 		xpathCardDescriptionEDS,
 	);
 
-	if (!cardDescription) {
-		cardDescription = getCardDescription(pageDocument, xpathCardDescription);
+	if (!cardData.description) {
+		cardData.description = getCardDescription(
+			pageDocument,
+			xpathCardDescription,
+		);
+	}
+
+	if (!cardData.imgLink) {
+		const img = document.querySelector(
+			packImgLauncherSpider,
+		) as HTMLAnchorElement;
+		cardData.imgLink = img.href;
 	}
 
 	const cardType = getElementText(pageDocument, xpathCardType);
 
-	let type = getElementText(pageDocument, xpathType);
-
-	if (!type) {
-		type = getElementText(pageDocument, xpathTypes);
-	}
+	cardData.cardType = cardType as CardType;
 
 	// TODO: need to get all the other card props
-	let isFusionMonster =
-		cardType === 'Monster' && type.toLocaleLowerCase().includes('fusion');
-	let isRitualMonster =
-		cardType === 'Monster' && type.toLocaleLowerCase().includes('ritual');
+	switch (cardType) {
+		case CardType.Monster:
+			const types = getElementText(pageDocument, xpathTypes);
+			if (types) {
+				cardData.monsterTypes = types.split(/ \/ /g) as MonsterType[];
+			} else {
+				cardData.monsterTypes = [
+					getElementText(pageDocument, xpathType) as MonsterType,
+				];
+			}
+			cardData.isFusionMonster = cardData.monsterTypes.includes(
+				MonsterType.Fusion,
+			);
+			cardData.isRitualMonster = cardData.monsterTypes.includes(
+				MonsterType.Ritual,
+			);
+			const atkDef = getElementText(pageDocument, xpathAtkDef).split(/ \/ /g);
+			cardData.atk = atkDef[0];
+			cardData.def = atkDef[1];
+			cardData.attribute = getElementText(
+				pageDocument,
+				xpathAttribute,
+			) as Attribute;
+			cardData.level = parseInt(getElementText(pageDocument, xpathLevel));
+			break;
+		case CardType.Spell:
+		case CardType.Trap:
+			cardData.property = getElementText(
+				pageDocument,
+				xpathProperty,
+			) as Property;
+			break;
+		default:
+			break;
+	}
 
-	return {
-		id: cardId,
-		name: cardName,
-		description: cardDescription,
-		boosterPack,
-		cardType,
-		rarity,
-		isFusionMonster,
-		isRitualMonster,
-	} as ICardData;
+	cardData.passcode = getElementText(pageDocument, xpathPasscode);
+
+	return cardData;
 }
 
 //TODO: decide if this should be called once per string or pass all strings of card into this one time
@@ -441,9 +610,25 @@ function evaluateElement(pageDocument: Document, xpath: string) {
 	).singleNodeValue;
 }
 
+async function getCardImgDocument() {
+	let domDoc: string; //Document;
+	await fetch(
+		'https://yugioh.fandom.com/wiki/Gallery_of_Yu-Gi-Oh!_The_Eternal_Duelist_Soul_cards',
+	)
+		.then((resp) => resp.text())
+		.then((result) => {
+			domDoc = result;
+			//domDoc = new DOMParser().parseFromString(result, 'text/html');
+		})
+		.catch((e) => console.log(`Card Info could not be retrieved: ${e}`));
+	console.log(domDoc);
+	return domDoc;
+}
+
 async function getCardInfo(
 	cardName: string,
 	url: RequestInfo | URL,
+	cardImgURL: RequestInfo | URL,
 	boosterPackName: BoosterPack,
 	rarity: Rarity,
 ) {
@@ -456,6 +641,7 @@ async function getCardInfo(
 				cardName,
 				boosterPackName,
 				rarity,
+				cardImgURL,
 			);
 		})
 		.catch((e) => console.log(`Card Info could not be retrieved: ${e}`));
