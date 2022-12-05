@@ -25,7 +25,7 @@ enum BoosterPack {
 	MilleniumEye = 'Millenium Eye',
 	BusterBlader = 'Buster Blader',
 	GreenMilleniumPuzzle = 'Green Millenium Puzzle',
-	MultiColoredMilleniumPuzzle = 'Multi-Colored Millenium Puzzle',
+	MultiColoredMilleniumPuzzle = 'Multi-colored Millenium Puzzle',
 }
 
 enum Rarity {
@@ -107,6 +107,8 @@ interface ICardData {
 	attribute?: Attribute;
 	level?: number;
 	ritualSpellCardName?: string;
+	ritualMonsterRequired?: string;
+	fusionMaterials?: string[];
 }
 
 interface IBoosterPackData {
@@ -148,8 +150,12 @@ const xpathPasscode =
 	'//a[contains(text(),"Passcode")]/../following-sibling::td';
 const xpathRitualSpellCardRequired =
 	'//a[contains(text(),"Ritual Spell Card")]/../following-sibling::td';
+const xpathRitualMonsterRequired =
+	'//a[contains(text(),"Ritual Monster")]/../following-sibling::td';
 const xpathDeckDetails =
 	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
+const xpathFusionMaterials =
+	'//th[contains(text(), "Materials")]/following-sibling::td';
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
 const packImg = 'div > figure > a.image';
@@ -160,7 +166,6 @@ const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
 const launcherSpiderBoosterPage =
 	'https://yugioh.fandom.com/wiki/Launcher_Spider_(EDS-BP)';
 //#endregion
-let cardImgDocument: Document;
 
 window.onload = async () => {
 	const button = document.createElement('button');
@@ -203,415 +208,8 @@ window.onload = async () => {
 	});
 };
 
-function checkBoosterPageStorage(button: HTMLButtonElement) {
-	chrome.storage.local.get(
-		'ygoKey',
-		(extensionStorage: { ygoKey: IContentStorageData }) => {
-			const storageDataInit = getNewContentStorageDataInstance();
-			if (!extensionStorage?.ygoKey?.cards?.length) {
-				chrome.storage.local.set({ ygoKey: storageDataInit }, () => {
-					console.log(
-						'Created new empty ContentStorageData object for Yu-Gi-Oh EDS Scraper',
-					);
-				});
-			} else {
-				//check if page has already been scraped
-				const boosterName = getBoosterName();
-
-				const isCurrentBoosterScraped =
-					extensionStorage?.ygoKey?.boosterPacks?.find((pack) => {
-						return pack.name === boosterName;
-					});
-
-				if (isCurrentBoosterScraped) {
-					disableScraperForPage(button);
-				}
-			}
-		},
-	);
-}
-
-function getBoosterName() {
-	const boosterNameElement = document.querySelector(headingId) as HTMLElement;
-	const boosterName = boosterNameElement.innerText
-		.replace(packSuffix, '')
-		.trim();
-	return boosterName;
-}
-
-function getNewContentStorageDataInstance() {
-	return {
-		cards: [],
-		boosterPacks: [],
-		starterDecks: [],
-		weeklySets: [],
-		magazines: [],
-		grandpaCupSets: [],
-	} as IContentStorageData;
-}
-
-async function getLocalStorage() {
-	const localStorage = (await chrome.storage.local.get('ygoKey')) as {
-		ygoKey: IContentStorageData;
-	};
-	return localStorage?.ygoKey;
-}
-
-async function setLocalStorage(contents: IContentStorageData) {
-	await chrome.storage.local.set({
-		ygoKey: contents,
-	});
-}
-
-function disableScraperForPage(button: HTMLButtonElement) {
-	button.textContent = 'Page Scraped!';
-	button.disabled = true;
-}
-
-// this should probably be future proofed, in the event other pages follow suit...
-function checkAndScrapeBoosterPage() {
-	if (document.location.href === launcherSpiderBoosterPage) {
-		scrapeLauncherSpiderBoosterPage();
-	} else {
-		scrapeBoosterPage();
-	}
-}
-
-// this should probably be future proofed, in the event other pages follow suit...
-async function scrapeLauncherSpiderBoosterPage() {
-	const boosterCardRows = document
-		.getElementById('Top_table')
-		.getElementsByTagName('tbody')[0].children;
-	const boosterName = BoosterPack.LauncherSpider;
-	const unlockCondition =
-		'The Launcher Spider Booster Pack is unlocked by defeating Mai Valentine 20 times';
-
-	const img = document.querySelector(
-		packImgLauncherSpider,
-	) as HTMLAnchorElement;
-	const imgLink = img.href;
-	const cardDataCollection: ICardData[] = [];
-
-	for (let i = 0; i < boosterCardRows.length; i++) {
-		const currentCardRow = (boosterCardRows.item(i) as HTMLElement).children;
-		const cardName = (currentCardRow.item(0) as HTMLElement)?.innerText
-			.trim()
-			.replace(/\"/g, '');
-		const cardRarity =
-			(currentCardRow.item(1) as HTMLElement)?.innerText === Rarity.Common
-				? Rarity.Common
-				: Rarity.Rare;
-		const cardURL = ygoFandomSite.concat(cardName.replace(/ /g, '_'));
-
-		const cardData = await getCardInfo(
-			cardName,
-			cardURL,
-			'',
-			boosterName,
-			cardRarity,
-		);
-
-		cardDataCollection.push(cardData);
-	}
-
-	console.log(boosterName);
-	console.log(unlockCondition);
-	console.log(imgLink);
-	console.log(cardDataCollection);
-}
-
-function boosterPageContents() {
-	const boosterName = getBoosterName();
-
-	const unlockCondition = (
-		evaluateElement(document, xpathUnlockCondition) as HTMLElement
-	)?.innerText;
-
-	const img = document.querySelector(packImg) as HTMLAnchorElement;
-	const imgLink = img.href;
-
-	const deckDetails = (
-		evaluateElement(document, xpathDeckDetails) as HTMLElement
-	)?.children;
-
-	return { boosterName, unlockCondition, imgLink, deckDetails };
-}
-
-function getCardImgXPath(cardText: string, isAltArtwork: boolean) {
-	let xpathCardImg = `//a[contains(text(), "${cardText}")]`;
-	if (isAltArtwork) {
-		xpathCardImg = xpathCardImg.concat(
-			'/../i/a[contains(text(), "Alternate artwork")]/..',
-		);
-	}
-	xpathCardImg = xpathCardImg.concat('/../preceding-sibling::div/div/a/img');
-	return xpathCardImg;
-}
-
-async function getCardDetails(
-	cardIds: string[],
-	pageContentStorageData: IContentStorageData,
-	boosterName: string,
-	deckDetails: HTMLCollection,
-) {
-	//console.log(cardIds, pageContentStorageData, boosterName, deckDetails);
-	for (let i = 0; i < deckDetails.length - 1; i++) {
-		const pElement = deckDetails.item(i);
-		const ulElement = deckDetails.item(i + 1);
-		const cardsCollection = ulElement.children;
-
-		if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
-			const cardRarity = (pElement as HTMLElement).innerText.trim();
-			for (let j = 0; j < cardsCollection.length; j++) {
-				const currentCard = cardsCollection.item(j) as HTMLElement;
-				let cardName = currentCard.innerText.trim();
-				let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
-					?.href;
-				if (cardURL.includes('#')) {
-					cardURL = cardURL.replace(/#/g, '_');
-				}
-
-				const cardHasAlternateArtwork = cardName.includes('(Alternate artwork');
-				//cardName.replace('(Alternate artwork)', '');
-				if (cardHasAlternateArtwork || cardName.includes('(Primary')) {
-					cardName = cardName.substring(0, cardName.indexOf(' (')).trim();
-				}
-
-				//console.log(cardImgDocument);
-				//console.log(getCardImgXPath(cardName, cardHasAlternateArtwork));
-				const cardImgURL = (
-					evaluateElement(
-						cardImgDocument,
-						getCardImgXPath(cardName, cardHasAlternateArtwork),
-					) as HTMLImageElement
-				)?.dataset.src;
-				if (!cardImgURL) {
-					console.log('cardName is bunked', cardName);
-				}
-
-				if (!Object.values(Rarity).includes(cardRarity as Rarity)) {
-					console.log(
-						`Rarity ${cardRarity} is not an accepted Rarity type. Big oops on the devs part. Bad Dev, Bad!`,
-					);
-					return;
-				} else if (
-					!Object.values(BoosterPack).includes(boosterName as BoosterPack)
-				) {
-					console.log(
-						`BoosterPack ${boosterName} is not an accepted BoosterPack type. Big oops on the devs part. Bad Dev, Bad!`,
-					);
-					return;
-				}
-
-				const cardData = await getCardInfo(
-					cardName,
-					cardURL,
-					cardImgURL,
-					boosterName as BoosterPack,
-					cardRarity as Rarity,
-				);
-
-				//console.log(cardData);
-				pageContentStorageData.cards.push(cardData);
-				cardIds.push(cardData.id);
-			}
-		}
-	}
-}
-
-async function scrapeBoosterPage() {
-	const cardIds: string[] = [];
-	const pageContentStorageData = getNewContentStorageDataInstance();
-
-	const storageContentStorageData = await getLocalStorage();
-
-	const { boosterName, unlockCondition, imgLink, deckDetails } =
-		boosterPageContents();
-
-	//console.log(boosterName, unlockCondition, imgLink, deckDetails);
-	// update cardIds and pageContentStorageData
-	await getCardDetails(
-		cardIds,
-		pageContentStorageData,
-		boosterName,
-		deckDetails,
-	);
-
-	pageContentStorageData.boosterPacks.push({
-		id: boosterName,
-		name: boosterName,
-		imgLink: imgLink,
-		unlockCondition: unlockCondition,
-		cardIds: cardIds,
-	});
-
-	if (
-		!storageContentStorageData?.cards?.length &&
-		!storageContentStorageData?.boosterPacks?.length
-	) {
-		await setLocalStorage(pageContentStorageData);
-	} else {
-		const updatedContentStorageData: IContentStorageData = {
-			...storageContentStorageData,
-			cards: storageContentStorageData.cards.concat(
-				pageContentStorageData.cards,
-			),
-			boosterPacks: storageContentStorageData.boosterPacks.concat(
-				pageContentStorageData.boosterPacks,
-			),
-		};
-		await setLocalStorage(updatedContentStorageData);
-	}
-
-	// print to console new storage data contents
-	chrome.storage.local.get(
-		'ygoKey',
-		(extensionStorage: { ygoKey: IContentStorageData }) => {
-			console.log('extensionStorage:', extensionStorage?.ygoKey);
-		},
-	);
-}
-
-function getCardDescription(pageDocument: Document, xpath: string) {
-	const descriptionNode = (
-		evaluateElement(pageDocument, xpath) as Element
-	)?.closest('tbody');
-	const cardDescriptionElement = descriptionNode?.querySelector(
-		cardDescriptionTd,
-	) as HTMLElement;
-	const cardDescription = cardDescriptionElement
-		? cardDescriptionElement.innerText.trim()
-		: '';
-	return cardDescription;
-}
-
-function getElementText(pageDocument: Document, xpath: string) {
-	const element = evaluateElement(pageDocument, xpath) as HTMLElement;
-	const elementText = element ? element.innerText.trim() : undefined;
-	return elementText;
-}
-
-function scrapeCardPage(
-	pageDocument: Document,
-	cardName: string,
-	boosterPack: BoosterPack,
-	rarity: Rarity,
-	cardImgURL: RequestInfo | URL,
-) {
-	const cardData: ICardData = {
-		id: `${cardName}-${boosterPack}`,
-		name: cardName,
-		description: '',
-		boosterPack: boosterPack,
-		cardType: CardType.Monster,
-		rarity: rarity,
-		imgLink: cardImgURL,
-		isFusionMonster: false,
-		isRitualMonster: false,
-		//ritualSpellCardName: '',
-	};
-
-	cardData.description = getCardDescription(
-		pageDocument,
-		xpathCardDescriptionEDS,
-	);
-
-	if (!cardData.description) {
-		cardData.description = getCardDescription(
-			pageDocument,
-			xpathCardDescription,
-		);
-	}
-
-	if (!cardData.imgLink) {
-		const img = document.querySelector(
-			packImgLauncherSpider,
-		) as HTMLAnchorElement;
-		cardData.imgLink = img.href;
-	}
-
-	const cardType = getElementText(pageDocument, xpathCardType);
-
-	cardData.cardType = cardType as CardType;
-
-	// TODO: need to get all the other card props
-	switch (cardType) {
-		case CardType.Monster:
-			const types = getElementText(pageDocument, xpathTypes);
-			if (types) {
-				cardData.monsterTypes = types.split(/ \/ /g) as MonsterType[];
-			} else {
-				cardData.monsterTypes = [
-					getElementText(pageDocument, xpathType) as MonsterType,
-				];
-			}
-			if (cardData.monsterTypes?.includes(MonsterType.Ritual)) {
-				cardData.ritualSpellCardName = getElementText(
-					pageDocument,
-					xpathRitualSpellCardRequired,
-				).replace(/\"/g, '');
-				if (cardData.ritualSpellCardName === 'Black Magic Ritual') {
-					cardData.ritualSpellCardName = 'Dark Magic Ritual';
-				}
-			}
-			cardData.isFusionMonster = cardData.monsterTypes.includes(
-				MonsterType.Fusion,
-			);
-			cardData.isRitualMonster = cardData.monsterTypes.includes(
-				MonsterType.Ritual,
-			);
-			const atkDef = getElementText(pageDocument, xpathAtkDef).split(/ \/ /g);
-			cardData.atk = atkDef[0];
-			cardData.def = atkDef[1];
-			cardData.attribute = getElementText(
-				pageDocument,
-				xpathAttribute,
-			) as Attribute;
-			cardData.level = parseInt(getElementText(pageDocument, xpathLevel));
-			break;
-		case CardType.Spell:
-		case CardType.Trap:
-			cardData.property = getElementText(
-				pageDocument,
-				xpathProperty,
-			) as Property;
-			break;
-		default:
-			break;
-	}
-
-	cardData.passcode = getElementText(pageDocument, xpathPasscode);
-
-	return cardData;
-}
-
-//TODO: decide if this should be called once per string or pass all strings of card into this one time
-function errorHandleStrings(
-	cardName: string | number,
-	cardDescription: string | number,
-	cardType: string | number,
-): {
-	cardName: string;
-	cardDescription: string;
-	cardType: string;
-} {
-	if (cardName === -1 || cardDescription === -1 || cardType === -1) {
-		console.log(
-			'Error with card: ',
-			cardName,
-			' description: ',
-			cardDescription,
-			' cardType: ',
-			cardType,
-		);
-	}
-
-	return {
-		cardName: (cardName as string).trim(),
-		cardDescription: (cardDescription as string).trim(),
-		cardType: (cardType as string).trim(),
-	};
-}
+//#region Common Code
+let cardImgDocument: Document;
 
 function evaluateElement(pageDocument: Document, xpath: string) {
 	return pageDocument.evaluate(
@@ -675,3 +273,481 @@ function downloadImage(url: RequestInfo | URL, name: string) {
 		})
 		.catch(() => console.log('An error sorry'));
 }
+
+function getCardDescription(pageDocument: Document, xpath: string) {
+	const descriptionNode = (
+		evaluateElement(pageDocument, xpath) as Element
+	)?.closest('tbody');
+	const cardDescriptionElement = descriptionNode?.querySelector(
+		cardDescriptionTd,
+	) as HTMLElement;
+	const cardDescription = cardDescriptionElement
+		? cardDescriptionElement.innerText.trim()
+		: '';
+	return cardDescription;
+}
+
+function getElementText(pageDocument: Document, xpath: string) {
+	const element = evaluateElement(pageDocument, xpath) as HTMLElement;
+	const elementText = element ? element.innerText.trim() : undefined;
+	return elementText;
+}
+
+function scrapeCardPage(
+	pageDocument: Document,
+	cardName: string,
+	boosterPack: BoosterPack,
+	rarity: Rarity,
+	cardImgURL: RequestInfo | URL,
+) {
+	const cardData: ICardData = {
+		id: `${cardName}-${boosterPack}`,
+		name: cardName,
+		description: '',
+		boosterPack: boosterPack,
+		cardType: CardType.Monster,
+		rarity: rarity,
+		imgLink: cardImgURL,
+		isFusionMonster: false,
+		isRitualMonster: false,
+	};
+
+	cardData.description = getCardDescription(
+		pageDocument,
+		xpathCardDescriptionEDS,
+	);
+
+	if (!cardData.description) {
+		cardData.description = getCardDescription(
+			pageDocument,
+			xpathCardDescription,
+		);
+	}
+
+	if (!cardData.imgLink) {
+		const img = document.querySelector(
+			packImgLauncherSpider,
+		) as HTMLAnchorElement;
+		cardData.imgLink = img.href;
+	}
+
+	const cardType = getElementText(pageDocument, xpathCardType);
+
+	cardData.cardType = cardType as CardType;
+
+	switch (cardType) {
+		case CardType.Monster:
+			const types = getElementText(pageDocument, xpathTypes);
+			if (types) {
+				cardData.monsterTypes = types.split(/ \/ /g) as MonsterType[];
+			} else {
+				cardData.monsterTypes = [
+					getElementText(pageDocument, xpathType) as MonsterType,
+				];
+			}
+			if (cardData.monsterTypes?.includes(MonsterType.Ritual)) {
+				cardData.ritualSpellCardName = getElementText(
+					pageDocument,
+					xpathRitualSpellCardRequired,
+				).replace(/\"/g, '');
+				if (cardData.ritualSpellCardName === 'Black Magic Ritual') {
+					cardData.ritualSpellCardName = 'Dark Magic Ritual';
+				}
+			} else if (cardData.monsterTypes?.includes(MonsterType.Fusion)) {
+				cardData.fusionMaterials = getElementText(
+					pageDocument,
+					xpathFusionMaterials,
+				)
+					.split(/\+/g)
+					.map((x) => x.replace(/\"/g, '').trim());
+			}
+			cardData.isFusionMonster = cardData.monsterTypes.includes(
+				MonsterType.Fusion,
+			);
+			cardData.isRitualMonster = cardData.monsterTypes.includes(
+				MonsterType.Ritual,
+			);
+			const atkDef = getElementText(pageDocument, xpathAtkDef).split(/ \/ /g);
+			cardData.atk = atkDef[0];
+			cardData.def = atkDef[1];
+			cardData.attribute = getElementText(
+				pageDocument,
+				xpathAttribute,
+			) as Attribute;
+			cardData.level = parseInt(getElementText(pageDocument, xpathLevel));
+			break;
+		case CardType.Spell:
+		case CardType.Trap:
+			cardData.property = getElementText(
+				pageDocument,
+				xpathProperty,
+			) as Property;
+			if (cardData.property === Property.Ritual) {
+				cardData.ritualMonsterRequired = getElementText(
+					pageDocument,
+					xpathRitualMonsterRequired,
+				).replace(/\"/g, '');
+			}
+			break;
+		default:
+			break;
+	}
+
+	cardData.passcode = getElementText(pageDocument, xpathPasscode);
+
+	return cardData;
+}
+
+function getCardImgXPath(cardText: string, isAltArtwork: boolean) {
+	let xpathCardImg = `//a[contains(text(), "${cardText}")]`;
+	if (isAltArtwork) {
+		xpathCardImg = xpathCardImg.concat(
+			'/../i/a[contains(text(), "Alternate artwork")]/..',
+		);
+	}
+	xpathCardImg = xpathCardImg.concat('/../preceding-sibling::div/div/a/img');
+	return xpathCardImg;
+}
+
+function checkBoosterPageStorage(button: HTMLButtonElement) {
+	chrome.storage.local.get(
+		'ygoKey',
+		(extensionStorage: { ygoKey: IContentStorageData }) => {
+			const storageDataInit = getNewContentStorageDataInstance();
+			if (!extensionStorage?.ygoKey?.cards?.length) {
+				chrome.storage.local.set({ ygoKey: storageDataInit }, () => {
+					console.log(
+						'Created new empty ContentStorageData object for Yu-Gi-Oh EDS Scraper',
+					);
+				});
+			} else {
+				const boosterName = getBoosterName();
+
+				const isCurrentBoosterScraped =
+					extensionStorage?.ygoKey?.boosterPacks?.find((pack) => {
+						return pack.name === boosterName;
+					});
+
+				if (isCurrentBoosterScraped) {
+					disableScraperForPage(button);
+				}
+			}
+		},
+	);
+}
+
+function getBoosterName() {
+	const boosterNameElement = document.querySelector(headingId) as HTMLElement;
+	const boosterName = boosterNameElement.innerText
+		.replace(packSuffix, '')
+		.trim();
+	return boosterName;
+}
+
+function getNewContentStorageDataInstance() {
+	return {
+		cards: [],
+		boosterPacks: [],
+		starterDecks: [],
+		weeklySets: [],
+		magazines: [],
+		grandpaCupSets: [],
+	} as IContentStorageData;
+}
+
+async function getLocalStorage() {
+	const localStorage = (await chrome.storage.local.get('ygoKey')) as {
+		ygoKey: IContentStorageData;
+	};
+	return localStorage?.ygoKey;
+}
+
+async function setLocalStorage(contents: IContentStorageData) {
+	await chrome.storage.local.set({
+		ygoKey: contents,
+	});
+}
+
+function disableScraperForPage(button: HTMLButtonElement) {
+	button.textContent = 'Page Scraped!';
+	button.disabled = true;
+}
+
+function checkAndScrapeBoosterPage() {
+	if (document.location.href === launcherSpiderBoosterPage) {
+		scrapeLauncherSpiderBoosterPage();
+	} else {
+		scrapeBoosterPage();
+	}
+}
+
+async function pushCardInfo(
+	cardName: string,
+	boosterName: string,
+	cardRarity: string,
+	cardURL: string,
+	pageContentStorageData: IContentStorageData,
+	cardIds: string[],
+	cardHasAlternateArtwork: boolean,
+) {
+	const cardImgURL = (
+		evaluateElement(
+			cardImgDocument,
+			getCardImgXPath(cardName, cardHasAlternateArtwork),
+		) as HTMLImageElement
+	)?.dataset.src;
+	if (!cardImgURL) {
+		console.log('cardName is bunked', cardName);
+	}
+
+	if (!Object.values(Rarity).includes(cardRarity as Rarity)) {
+		console.log(
+			`Rarity ${cardRarity} is not an accepted Rarity type. Big oops on the devs part. Bad Dev, Bad!`,
+		);
+		return;
+	} else if (!Object.values(BoosterPack).includes(boosterName as BoosterPack)) {
+		console.log(
+			`BoosterPack ${boosterName} is not an accepted BoosterPack type. Big oops on the devs part. Bad Dev, Bad!`,
+		);
+		return;
+	}
+
+	const cardData = await getCardInfo(
+		cardName,
+		cardURL,
+		cardImgURL,
+		boosterName as BoosterPack,
+		cardRarity as Rarity,
+	);
+
+	pageContentStorageData.cards.push(cardData);
+	cardIds.push(cardData.id);
+}
+
+async function updateContentLocalStorageData(
+	boosterName: string,
+	imgLink: string,
+	unlockCondition: string,
+	cardIds: string[],
+	pageContentStorageData: IContentStorageData,
+	storageContentStorageData: IContentStorageData,
+) {
+	pageContentStorageData.boosterPacks.push({
+		id: boosterName,
+		name: boosterName,
+		imgLink: imgLink,
+		unlockCondition: unlockCondition,
+		cardIds: cardIds,
+	});
+
+	if (
+		!storageContentStorageData?.cards?.length &&
+		!storageContentStorageData?.boosterPacks?.length
+	) {
+		await setLocalStorage(pageContentStorageData);
+	} else {
+		const updatedContentStorageData: IContentStorageData = {
+			...storageContentStorageData,
+			cards: storageContentStorageData.cards.concat(
+				pageContentStorageData.cards,
+			),
+			boosterPacks: storageContentStorageData.boosterPacks.concat(
+				pageContentStorageData.boosterPacks,
+			),
+		};
+		await setLocalStorage(updatedContentStorageData);
+	}
+
+	// print to console new storage data contents
+	chrome.storage.local.get(
+		'ygoKey',
+		(extensionStorage: { ygoKey: IContentStorageData }) => {
+			console.log('extensionStorage:', extensionStorage?.ygoKey);
+		},
+	);
+}
+
+async function scraperPageCommons(packImgPath?: string) {
+	const cardIds: string[] = [];
+	const pageContentStorageData = getNewContentStorageDataInstance();
+	const storageContentStorageData = await getLocalStorage();
+	let boosterName = undefined;
+	let imgLink = undefined;
+	if (packImgPath === packImgLauncherSpider) {
+		boosterName = getBoosterName();
+		imgLink = (document.querySelector(packImgPath) as HTMLAnchorElement).href;
+	}
+
+	return {
+		cardIds,
+		pageContentStorageData,
+		storageContentStorageData,
+		boosterName,
+		imgLink,
+	};
+}
+//#endregion
+
+//#region Edge-Case Launcher Spider BP
+async function getLauncherSpiderBoosterPackCardDetails(
+	cardIds: string[],
+	pageContentStorageData: IContentStorageData,
+	boosterName: string,
+	boosterCardRows: HTMLCollection,
+) {
+	for (let i = 0; i < boosterCardRows.length; i++) {
+		const currentCardRow = (boosterCardRows.item(i) as HTMLElement).children;
+		let cardName = (currentCardRow.item(0) as HTMLElement)?.innerText
+			.trim()
+			.replace(/\"/g, '');
+
+		const cardRarity =
+			(currentCardRow.item(1) as HTMLElement)?.innerText === Rarity.Common
+				? Rarity.Common
+				: Rarity.Rare;
+		const cardURL = ygoFandomSite.concat(cardName.replace(/ /g, '_'));
+
+		if (cardName.endsWith(' 1')) {
+			cardName = cardName.replace(' 1', ' #1');
+		} else if (cardName.endsWith(' 2')) {
+			cardName = cardName.replace(' 2', ' #2');
+		}
+
+		await pushCardInfo(
+			cardName,
+			boosterName,
+			cardRarity,
+			cardURL,
+			pageContentStorageData,
+			cardIds,
+			false,
+		);
+	}
+}
+
+async function scrapeLauncherSpiderBoosterPage() {
+	const {
+		cardIds,
+		pageContentStorageData,
+		storageContentStorageData,
+		boosterName,
+		imgLink,
+	} = await scraperPageCommons(packImgLauncherSpider);
+
+	const boosterCardRows = document
+		.getElementById('Top_table')
+		.getElementsByTagName('tbody')[0].children;
+	const unlockCondition =
+		'The Launcher Spider Booster Pack is unlocked by defeating Mai Valentine 20 times';
+
+	await getLauncherSpiderBoosterPackCardDetails(
+		cardIds,
+		pageContentStorageData,
+		boosterName,
+		boosterCardRows,
+	);
+
+	await updateContentLocalStorageData(
+		boosterName,
+		imgLink,
+		unlockCondition,
+		cardIds,
+		pageContentStorageData,
+		storageContentStorageData,
+	);
+}
+//#endregion
+
+//#region General Booster Packs
+function boosterPageContents() {
+	const boosterName = getBoosterName();
+
+	const unlockCondition = (
+		evaluateElement(document, xpathUnlockCondition) as HTMLElement
+	)?.innerText;
+
+	const img = document.querySelector(packImg) as HTMLAnchorElement;
+	const imgLink = img.href;
+
+	const deckDetails = (
+		evaluateElement(document, xpathDeckDetails) as HTMLElement
+	)?.children;
+
+	return { boosterName, unlockCondition, imgLink, deckDetails };
+}
+
+async function getCardDetails(
+	cardIds: string[],
+	pageContentStorageData: IContentStorageData,
+	boosterName: string,
+	deckDetails: HTMLCollection,
+) {
+	for (let i = 0; i < deckDetails.length - 1; i++) {
+		const pElement = deckDetails.item(i);
+		const ulElement = deckDetails.item(i + 1);
+		const cardsCollection = ulElement.children;
+
+		if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
+			const cardRarity = (pElement as HTMLElement).innerText.trim();
+			for (let j = 0; j < cardsCollection.length; j++) {
+				const currentCard = cardsCollection.item(j) as HTMLElement;
+				let cardName = currentCard.innerText.trim();
+				let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
+					?.href;
+				if (cardURL.includes('#')) {
+					cardURL = cardURL.replace(/#/g, '_');
+				}
+
+				const cardHasAlternateArtwork = cardName.includes('(Alternate artwork');
+				if (cardHasAlternateArtwork || cardName.includes('(Primary')) {
+					cardName = cardName.substring(0, cardName.indexOf(' (')).trim();
+				}
+
+				//Bunked card edge cases
+				if (cardName === 'Anti-Spell Fragrance') {
+					cardName = 'Anti-Magic Fragrance';
+				} else if (cardName === 'Alligator Sword Dragon') {
+					cardName = "Alligator's Sword Dragon";
+				} else if (cardName === 'Tribute to the Doomed') {
+					cardName = 'Tribute to The Doomed';
+				} else if (cardName === 'Gift of the Mystical Elf') {
+					cardName = 'Gift of The Mystical Elf';
+				}
+
+				await pushCardInfo(
+					cardName,
+					boosterName,
+					cardRarity,
+					cardURL,
+					pageContentStorageData,
+					cardIds,
+					cardHasAlternateArtwork,
+				);
+			}
+		}
+	}
+}
+
+async function scrapeBoosterPage() {
+	const { cardIds, pageContentStorageData, storageContentStorageData } =
+		await scraperPageCommons();
+	const { boosterName, unlockCondition, imgLink, deckDetails } =
+		boosterPageContents();
+
+	await getCardDetails(
+		cardIds,
+		pageContentStorageData,
+		boosterName,
+		deckDetails,
+	);
+
+	await updateContentLocalStorageData(
+		boosterName,
+		imgLink,
+		unlockCondition,
+		cardIds,
+		pageContentStorageData,
+		storageContentStorageData,
+	);
+}
+//#endregion
