@@ -106,6 +106,7 @@ interface ICardData {
 	def?: string;
 	attribute?: Attribute;
 	level?: number;
+	ritualSpellCardName?: string;
 }
 
 interface IBoosterPackData {
@@ -114,7 +115,6 @@ interface IBoosterPackData {
 	unlockCondition: string;
 	imgLink: string | URL;
 	cardIds: string[];
-	redeemed: number;
 }
 
 interface IContentStorageData {
@@ -146,6 +146,8 @@ const xpathProperty =
 	'//a[contains(text(),"Property")]/../following-sibling::td';
 const xpathPasscode =
 	'//a[contains(text(),"Passcode")]/../following-sibling::td';
+const xpathRitualSpellCardRequired =
+	'//a[contains(text(),"Ritual Spell Card")]/../following-sibling::td';
 const xpathDeckDetails =
 	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 const headingId = '#firstHeading';
@@ -177,23 +179,18 @@ window.onload = async () => {
 
 	document.querySelector(headingId).parentElement.append(button);
 
-	//send to background
+	//cache card image DOM in service-worker
 	chrome.runtime.sendMessage({ message: 'cache' }, async (response) => {
-		console.log('response.response', response.response);
 		if (!response.response) {
 			chrome.runtime.sendMessage(
 				{
-					message:
-						//new XMLSerializer().serializeToString(
-						await getCardImgDocument(),
-					//),
+					message: await getCardImgDocument(),
 				},
 				(resp) => {
 					cardImgDocument = new DOMParser().parseFromString(
 						resp.response,
 						'text/html',
 					);
-					console.log('cardImgDocument', cardImgDocument);
 				},
 			);
 		} else {
@@ -344,10 +341,10 @@ function getCardImgXPath(cardText: string, isAltArtwork: boolean) {
 	let xpathCardImg = `//a[contains(text(), "${cardText}")]`;
 	if (isAltArtwork) {
 		xpathCardImg = xpathCardImg.concat(
-			'/../i/a[contains(text(), "Alternate artwork")]',
+			'/../i/a[contains(text(), "Alternate artwork")]/..',
 		);
 	}
-	xpathCardImg = xpathCardImg.concat('/../../preceding-sibling::div/div/a');
+	xpathCardImg = xpathCardImg.concat('/../preceding-sibling::div/div/a/img');
 	return xpathCardImg;
 }
 
@@ -357,7 +354,7 @@ async function getCardDetails(
 	boosterName: string,
 	deckDetails: HTMLCollection,
 ) {
-	console.log(cardIds, pageContentStorageData, boosterName, deckDetails);
+	//console.log(cardIds, pageContentStorageData, boosterName, deckDetails);
 	for (let i = 0; i < deckDetails.length - 1; i++) {
 		const pElement = deckDetails.item(i);
 		const ulElement = deckDetails.item(i + 1);
@@ -367,23 +364,30 @@ async function getCardDetails(
 			const cardRarity = (pElement as HTMLElement).innerText.trim();
 			for (let j = 0; j < cardsCollection.length; j++) {
 				const currentCard = cardsCollection.item(j) as HTMLElement;
-				const cardName = currentCard.innerText.trim();
+				let cardName = currentCard.innerText.trim();
 				let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
 					?.href;
 				if (cardURL.includes('#')) {
 					cardURL = cardURL.replace(/#/g, '_');
 				}
 
-				const cardHasAlternateArtwork = cardName.includes('Alternate artwork');
+				const cardHasAlternateArtwork = cardName.includes('(Alternate artwork');
+				//cardName.replace('(Alternate artwork)', '');
+				if (cardHasAlternateArtwork || cardName.includes('(Primary')) {
+					cardName = cardName.substring(0, cardName.indexOf(' (')).trim();
+				}
 
-				console.log(cardImgDocument);
-				console.log(getCardImgXPath(cardName, cardHasAlternateArtwork));
+				//console.log(cardImgDocument);
+				//console.log(getCardImgXPath(cardName, cardHasAlternateArtwork));
 				const cardImgURL = (
 					evaluateElement(
 						cardImgDocument,
 						getCardImgXPath(cardName, cardHasAlternateArtwork),
-					) as HTMLAnchorElement
-				)?.href;
+					) as HTMLImageElement
+				)?.dataset.src;
+				if (!cardImgURL) {
+					console.log('cardName is bunked', cardName);
+				}
 
 				if (!Object.values(Rarity).includes(cardRarity as Rarity)) {
 					console.log(
@@ -407,7 +411,7 @@ async function getCardDetails(
 					cardRarity as Rarity,
 				);
 
-				console.log(cardData);
+				//console.log(cardData);
 				pageContentStorageData.cards.push(cardData);
 				cardIds.push(cardData.id);
 			}
@@ -424,7 +428,7 @@ async function scrapeBoosterPage() {
 	const { boosterName, unlockCondition, imgLink, deckDetails } =
 		boosterPageContents();
 
-	console.log(boosterName, unlockCondition, imgLink, deckDetails);
+	//console.log(boosterName, unlockCondition, imgLink, deckDetails);
 	// update cardIds and pageContentStorageData
 	await getCardDetails(
 		cardIds,
@@ -437,7 +441,6 @@ async function scrapeBoosterPage() {
 		id: boosterName,
 		name: boosterName,
 		imgLink: imgLink,
-		redeemed: 0,
 		unlockCondition: unlockCondition,
 		cardIds: cardIds,
 	});
@@ -505,6 +508,7 @@ function scrapeCardPage(
 		imgLink: cardImgURL,
 		isFusionMonster: false,
 		isRitualMonster: false,
+		//ritualSpellCardName: '',
 	};
 
 	cardData.description = getCardDescription(
@@ -540,6 +544,15 @@ function scrapeCardPage(
 				cardData.monsterTypes = [
 					getElementText(pageDocument, xpathType) as MonsterType,
 				];
+			}
+			if (cardData.monsterTypes?.includes(MonsterType.Ritual)) {
+				cardData.ritualSpellCardName = getElementText(
+					pageDocument,
+					xpathRitualSpellCardRequired,
+				).replace(/\"/g, '');
+				if (cardData.ritualSpellCardName === 'Black Magic Ritual') {
+					cardData.ritualSpellCardName = 'Dark Magic Ritual';
+				}
 			}
 			cardData.isFusionMonster = cardData.monsterTypes.includes(
 				MonsterType.Fusion,
@@ -611,17 +624,15 @@ function evaluateElement(pageDocument: Document, xpath: string) {
 }
 
 async function getCardImgDocument() {
-	let domDoc: string; //Document;
+	let domDoc: string;
 	await fetch(
 		'https://yugioh.fandom.com/wiki/Gallery_of_Yu-Gi-Oh!_The_Eternal_Duelist_Soul_cards',
 	)
 		.then((resp) => resp.text())
 		.then((result) => {
 			domDoc = result;
-			//domDoc = new DOMParser().parseFromString(result, 'text/html');
 		})
 		.catch((e) => console.log(`Card Info could not be retrieved: ${e}`));
-	console.log(domDoc);
 	return domDoc;
 }
 
