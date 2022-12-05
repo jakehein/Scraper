@@ -1,4 +1,3 @@
-// TODO: add button to this list to grab ALL cards in one loop? Maybe get images this way...
 // https://yugioh.fandom.com/wiki/Gallery_of_Yu-Gi-Oh!_The_Eternal_Duelist_Soul_cards
 
 //#region Enums
@@ -463,9 +462,18 @@ async function getLocalStorage() {
 }
 
 async function setLocalStorage(contents: IContentStorageData) {
-	await chrome.storage.local.set({
-		ygoKey: contents,
-	});
+	chrome.storage.local.set(
+		{
+			ygoKey: contents,
+		},
+		() => {
+			if (chrome.runtime.lastError) {
+				console.error(chrome.runtime.lastError);
+			} else {
+				alert('Page has successfully been scraped!');
+			}
+		},
+	);
 }
 
 function disableScraperForPage(button: HTMLButtonElement) {
@@ -477,7 +485,7 @@ function checkAndScrapeBoosterPage() {
 	if (document.location.href === launcherSpiderBoosterPage) {
 		scrapeLauncherSpiderBoosterPage();
 	} else {
-		scrapeBoosterPage();
+		scrapeGeneralBoosterPage();
 	}
 }
 
@@ -544,7 +552,7 @@ async function updateContentLocalStorageData(
 		!storageContentStorageData?.cards?.length &&
 		!storageContentStorageData?.boosterPacks?.length
 	) {
-		await setLocalStorage(pageContentStorageData);
+		setLocalStorage(pageContentStorageData);
 	} else {
 		const updatedContentStorageData: IContentStorageData = {
 			...storageContentStorageData,
@@ -555,7 +563,7 @@ async function updateContentLocalStorageData(
 				pageContentStorageData.boosterPacks,
 			),
 		};
-		await setLocalStorage(updatedContentStorageData);
+		setLocalStorage(updatedContentStorageData);
 	}
 
 	// print to console new storage data contents
@@ -567,7 +575,7 @@ async function updateContentLocalStorageData(
 	);
 }
 
-async function scraperPageCommons(packImgPath?: string) {
+async function getCommonVars(packImgPath?: string) {
 	const cardIds: string[] = [];
 	const pageContentStorageData = getNewContentStorageDataInstance();
 	const storageContentStorageData = await getLocalStorage();
@@ -632,7 +640,7 @@ async function scrapeLauncherSpiderBoosterPage() {
 		storageContentStorageData,
 		boosterName,
 		imgLink,
-	} = await scraperPageCommons(packImgLauncherSpider);
+	} = await getCommonVars(packImgLauncherSpider);
 
 	const boosterCardRows = document
 		.getElementById('Top_table')
@@ -659,7 +667,7 @@ async function scrapeLauncherSpiderBoosterPage() {
 //#endregion
 
 //#region General Booster Packs
-function boosterPageContents() {
+function generalBoosterPageContents() {
 	const boosterName = getBoosterName();
 
 	const unlockCondition = (
@@ -676,7 +684,7 @@ function boosterPageContents() {
 	return { boosterName, unlockCondition, imgLink, deckDetails };
 }
 
-async function getCardDetails(
+async function getGeneralBoosterPackCardDetails(
 	cardIds: string[],
 	pageContentStorageData: IContentStorageData,
 	boosterName: string,
@@ -728,13 +736,13 @@ async function getCardDetails(
 	}
 }
 
-async function scrapeBoosterPage() {
+async function scrapeGeneralBoosterPage() {
 	const { cardIds, pageContentStorageData, storageContentStorageData } =
-		await scraperPageCommons();
+		await getCommonVars();
 	const { boosterName, unlockCondition, imgLink, deckDetails } =
-		boosterPageContents();
+		generalBoosterPageContents();
 
-	await getCardDetails(
+	await getGeneralBoosterPackCardDetails(
 		cardIds,
 		pageContentStorageData,
 		boosterName,
