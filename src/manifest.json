@@ -1,7 +1,7 @@
 {
   "name": "Yu-Gi-Oh Scraper Extension",
   "description": "Scrape shit for use in YGO-EDS",
-  "version": "1.0",
+  "version": "1.0.0",
   "manifest_version": 3,
   "action": {
     "default_popup": "scraper.html",

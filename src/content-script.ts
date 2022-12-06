@@ -1,7 +1,5 @@
-// https://yugioh.fandom.com/wiki/Gallery_of_Yu-Gi-Oh!_The_Eternal_Duelist_Soul_cards
-
 //#region Enums
-enum BoosterPack {
+export enum BoosterPack {
 	DarkMagician = 'Dark Magician',
 	MysticalElf = 'Mystical Elf',
 	RedEyesBDragon = 'Red-Eyes B. Dragon',
@@ -123,7 +121,7 @@ interface IBoosterPackData {
 	cardIds: string[];
 }
 
-interface IContentStorageData {
+export interface IContentStorageData {
 	cards: ICardData[];
 	boosterPacks: IBoosterPackData[];
 }
@@ -261,23 +259,6 @@ async function getCardInfo(
 		})
 		.catch((e) => console.log(`Card Info could not be retrieved: ${e}`));
 	return cardData;
-}
-
-function downloadImage(url: RequestInfo | URL, name: string) {
-	fetch(url)
-		.then((resp) => resp.blob())
-		.then((blob) => {
-			const url = window.URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.style.display = 'none';
-			a.href = url;
-			// the filename you want
-			a.download = name;
-			document.body.appendChild(a);
-			a.click();
-			window.URL.revokeObjectURL(url);
-		})
-		.catch(() => console.log('An error sorry'));
 }
 
 function getCardDescription(pageDocument: Document, xpath: string) {
@@ -576,14 +557,6 @@ async function updateContentLocalStorageData(
 		};
 		setLocalStorage(updatedContentStorageData);
 	}
-
-	// print to console new storage data contents
-	chrome.storage.local.get(
-		'ygoKey',
-		(extensionStorage: { ygoKey: IContentStorageData }) => {
-			console.log('extensionStorage:', extensionStorage?.ygoKey);
-		},
-	);
 }
 
 async function getCommonVars(packImgPath?: string) {
@@ -607,7 +580,7 @@ async function getCommonVars(packImgPath?: string) {
 }
 //#endregion
 
-//#region Booster Packs
+//#region Choosable Booster Packs
 //#region Edge-Case Launcher Spider BP
 async function getLauncherSpiderBoosterPackCardDetails(
 	cardIds: string[],
@@ -773,7 +746,7 @@ async function scrapeGeneralBoosterPage() {
 //#endregion
 //#endregion
 
-//#region Weekly YuGiOh and Grandpa Cup
+//#region Conditional Booster Packs
 async function scrapeWeeklyAndGrandpaCupYuGiOhPage() {
 	const { pageContentStorageData, storageContentStorageData } =
 		await getCommonVars();
@@ -793,12 +766,7 @@ async function scrapeWeeklyAndGrandpaCupYuGiOhPage() {
 	) {
 		const set = (setsCollection.item(i) as HTMLElement).innerText.trim();
 		const cardIds: string[] = [];
-		console.log(setsCollection);
 		for (let j = 0; j < 4; j += 2) {
-			console.log(
-				setsCollection.item(i + j + 1),
-				setsCollection.item(i + j + 2),
-			);
 			const pElement = setsCollection.item(i + j + 1);
 			const ulElement = isGrandpaCupPage
 				? setsCollection.item(i + j + 2)
@@ -847,9 +815,7 @@ async function scrapeWeeklyAndGrandpaCupYuGiOhPage() {
 		);
 	}
 }
-//#endregion
 
-//#region YuGiOh Magazine
 async function scrapeYuGiOhMagazinePage() {
 	const { cardIds, pageContentStorageData, storageContentStorageData } =
 		await getCommonVars();
@@ -900,6 +866,5 @@ async function scrapeYuGiOhMagazinePage() {
 		pageContentStorageData,
 		storageContentStorageData,
 	);
-	//console.log('test');
 }
 //#endregion
