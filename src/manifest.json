@@ -13,7 +13,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://yugioh.fandom.com/wiki/*(EDS-BP)"
+        "https://yugioh.fandom.com/wiki/*(EDS-BP)",
+        "https://yugioh.fandom.com/wiki/Weekly_Yu-Gi-Oh!",
+        "https://yugioh.fandom.com/wiki/Yu-Gi-Oh!_Magazine",
+        "https://yugioh.fandom.com/wiki/Grandpa_Cup"
       ],
       "js": [
         "content-script.js"

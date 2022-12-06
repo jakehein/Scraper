@@ -27,6 +27,20 @@ enum BoosterPack {
 	MultiColoredMilleniumPuzzle = 'Multi-colored Millenium Puzzle',
 }
 
+enum WeeklyYuGiOh {
+  weeklyYuGiOh1 = 'Set 1',
+	weeklyYuGiOh2 = 'Set 2',
+}
+
+enum Magazine {
+  magazine = 'Yu-Gi-Oh! Magazine',
+}
+
+enum GrandpaCup {
+  grandpaCupQualifying = 'Qualifying Round',
+	grandpaCupFinal = 'Final',
+}
+
 enum Rarity {
 	Rare = 'Rare',
 	Common = 'Common',
@@ -155,6 +169,8 @@ const xpathDeckDetails =
 	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 const xpathFusionMaterials =
 	'//th[contains(text(), "Materials")]/following-sibling::td';
+const xpathWeeklySets =
+	'//*[@id="mw-content-text"]/div[@class="mw-parser-output"]';
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
 const packImg = 'div > figure > a.image';
@@ -164,6 +180,10 @@ const cardDescriptionTd = 'tr:nth-child(3) > td';
 const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
 const launcherSpiderBoosterPage =
 	'https://yugioh.fandom.com/wiki/Launcher_Spider_(EDS-BP)';
+const weeklyYuGiOhPage = 'https://yugioh.fandom.com/wiki/Weekly_Yu-Gi-Oh!';
+const yuGiOhMagazinePage = 'https://yugioh.fandom.com/wiki/Yu-Gi-Oh!_Magazine';
+const grandpaCupPage = 'https://yugioh.fandom.com/wiki/Grandpa_Cup';
+
 //#endregion
 
 window.onload = async () => {
@@ -172,7 +192,7 @@ window.onload = async () => {
 	button.textContent = 'Scrape Page';
 
 	button.addEventListener('click', () => {
-		checkAndScrapeBoosterPage();
+		checkPageToScrape();
 		disableScraperForPage(button);
 	});
 
@@ -436,11 +456,13 @@ function checkBoosterPageStorage(button: HTMLButtonElement) {
 }
 
 function getBoosterName() {
-	const boosterNameElement = document.querySelector(headingId) as HTMLElement;
-	const boosterName = boosterNameElement.innerText
-		.replace(packSuffix, '')
-		.trim();
+	const boosterName = getHeadingText().replace(packSuffix, '').trim();
 	return boosterName;
+}
+
+function getHeadingText() {
+	const headingElement = document.querySelector(headingId) as HTMLElement;
+	return headingElement.innerText;
 }
 
 function getNewContentStorageDataInstance() {
@@ -481,9 +503,15 @@ function disableScraperForPage(button: HTMLButtonElement) {
 	button.disabled = true;
 }
 
-function checkAndScrapeBoosterPage() {
+function checkPageToScrape() {
 	if (document.location.href === launcherSpiderBoosterPage) {
 		scrapeLauncherSpiderBoosterPage();
+	} else if (document.location.href === weeklyYuGiOhPage) {
+		scrapeWeeklyYuGiOhPage();
+	} else if (document.location.href === yuGiOhMagazinePage) {
+		scrapeYuGiOhMagazinePage();
+	} else if (document.location.href === grandpaCupPage) {
+		scrapeGrandpaCupPage();
 	} else {
 		scrapeGeneralBoosterPage();
 	}
@@ -513,20 +541,31 @@ async function pushCardInfo(
 			`Rarity ${cardRarity} is not an accepted Rarity type. Big oops on the devs part. Bad Dev, Bad!`,
 		);
 		return;
-	} else if (!Object.values(BoosterPack).includes(boosterName as BoosterPack)) {
-		console.log(
+	} 
+  //need to rework, maybe just delete all other 
+  //collections and just go with boosters?
+  let cardData: ;
+  if (Object.values(WeeklyYuGiOh).includes(boosterName as WeeklyYuGiOh)) {
+     cardData = await getCardInfo(cardName, cardURL, cardImgURL,
+      boosterName as WeeklyYuGiOh, cardRarity as Rarity)
+  } else if (Object.values(Magazine).includes(boosterName as Magazine)) {
+
+  } else if (Object.values(GrandpaCup).includes(boosterName as GrandpaCup)) {
+
+  } else if (!Object.values(BoosterPack).includes(boosterName as BoosterPack)) {
+    console.log(
 			`BoosterPack ${boosterName} is not an accepted BoosterPack type. Big oops on the devs part. Bad Dev, Bad!`,
 		);
 		return;
-	}
-
-	const cardData = await getCardInfo(
-		cardName,
-		cardURL,
-		cardImgURL,
-		boosterName as BoosterPack,
-		cardRarity as Rarity,
-	);
+	} else {
+   cardData = await getCardInfo(
+      cardName,
+      cardURL,
+      cardImgURL,
+      boosterName as BoosterPack,
+      cardRarity as Rarity,
+    );
+  }
 
 	pageContentStorageData.cards.push(cardData);
 	cardIds.push(cardData.id);
@@ -596,6 +635,7 @@ async function getCommonVars(packImgPath?: string) {
 }
 //#endregion
 
+//#region Booster Packs
 //#region Edge-Case Launcher Spider BP
 async function getLauncherSpiderBoosterPackCardDetails(
 	cardIds: string[],
@@ -757,5 +797,93 @@ async function scrapeGeneralBoosterPage() {
 		pageContentStorageData,
 		storageContentStorageData,
 	);
+}
+//#endregion
+//#endregion
+
+//#region Weekly YuGiOh
+async function scrapeWeeklyYuGiOhPage() {
+	//const name = getHeadingText();
+	//loop over elements
+	const { cardIds, pageContentStorageData, storageContentStorageData } =
+		await getCommonVars();
+
+	const weeklySetsCollection = (
+		evaluateElement(document, xpathWeeklySets) as HTMLElement
+	)?.children;
+
+	//get the two sets from the div collection, pruning the bad nodes
+	//there's a more clever way to do this, but i'm tired and don't care
+	for (let i = 3; i < weeklySetsCollection.length - 2; i + 6) {
+		const weeklySet = (
+			weeklySetsCollection.item(i) as HTMLElement
+		).innerText.trim();
+		for (let j = 0; j < 2; j++) {
+			const pElement = weeklySetsCollection.item(i + j + 1);
+			const ulElement = weeklySetsCollection.item(i + j + 2).firstElementChild;
+			const cardsCollection = ulElement.children;
+
+			if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
+				const cardRarity = (pElement as HTMLElement).innerText.trim();
+				for (let k = 0; k < cardsCollection.length; k++) {
+					const currentCard = cardsCollection.item(j) as HTMLElement;
+					let cardName = currentCard.innerText.trim();
+					let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
+						?.href;
+					if (cardURL.includes('#')) {
+						cardURL = cardURL.replace(/#/g, '_');
+					}
+
+					const cardHasAlternateArtwork =
+						cardName.includes('(Alternate artwork');
+					if (cardHasAlternateArtwork || cardName.includes('(Primary')) {
+						cardName = cardName.substring(0, cardName.indexOf(' (')).trim();
+					}
+
+					await pushCardInfo(
+						cardName,
+						weeklySet,
+						cardRarity,
+						cardURL,
+						pageContentStorageData,
+						cardIds,
+						cardHasAlternateArtwork,
+					);
+				}
+			}
+		}
+	}
+	//set 1
+	//*[@id="mw-content-text"]/div/h3[1]
+
+	//rare and common
+	//*[@id="mw-content-text"]/div/p[2]
+	//*[@id="mw-content-text"]/div/div[2]
+
+	//*[@id="mw-content-text"]/div/p[3]
+	//*[@id="mw-content-text"]/div/div[3]
+
+	//set 2
+	//*[@id="mw-content-text"]/div/h3[2]
+
+	//rare and common
+	//*[@id="mw-content-text"]/div/p[5]
+	//*[@id="mw-content-text"]/div/div[4]
+	//*[@id="mw-content-text"]/div/p[6]
+	//*[@id="mw-content-text"]/div/div[5]
+
+	console.log('test');
+}
+//#endregion
+
+//#region YuGiOh Magazine
+function scrapeYuGiOhMagazinePage() {
+	console.log('test');
+}
+//#endregion
+
+//#region Grandpa Cup
+function scrapeGrandpaCupPage() {
+	console.log('test');
 }
 //#endregion
