@@ -1,7 +1,7 @@
 import { BoosterPack, IContentStorageData } from './content-script';
 
 const boostersRemaining = document.getElementById('boostersRemaining');
-const downloadedContents = document.getElementById('contents');
+const downloadContents = document.getElementById('contents');
 let scrapedContent: IContentStorageData;
 
 window.onload = async () => {
@@ -12,19 +12,22 @@ window.onload = async () => {
 		}
 	)?.ygoKey;
 	console.log(scrapedContent);
-	const str: string[] = Object.values(BoosterPack);
+	const boostersUnscraped: string[] = Object.values(BoosterPack);
 	scrapedContent.boosterPacks.forEach((pack) => {
-		const i = str.indexOf(pack.name);
-		str.splice(i, 1);
+		const i = boostersUnscraped.indexOf(pack.name);
+		boostersUnscraped.splice(i, 1);
 	});
-	str.forEach((el) => {
+	boostersUnscraped.forEach((el) => {
 		const element = document.createElement('div');
 		element.innerHTML = `<span>${el}</span>`;
-		boostersRemaining.append(el);
+		boostersRemaining.append(element);
 	});
+	if (!boostersUnscraped.length) {
+		downloadContents.setAttribute('disabled', 'false');
+	}
 };
 
-downloadedContents.addEventListener('click', async () => {
+downloadContents.addEventListener('click', async () => {
 	downloadJSON();
 });
 
