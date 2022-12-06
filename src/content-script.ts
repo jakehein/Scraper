@@ -25,19 +25,10 @@ enum BoosterPack {
 	BusterBlader = 'Buster Blader',
 	GreenMilleniumPuzzle = 'Green Millenium Puzzle',
 	MultiColoredMilleniumPuzzle = 'Multi-colored Millenium Puzzle',
-}
-
-enum WeeklyYuGiOh {
-  weeklyYuGiOh1 = 'Set 1',
+	weeklyYuGiOh1 = 'Set 1',
 	weeklyYuGiOh2 = 'Set 2',
-}
-
-enum Magazine {
-  magazine = 'Yu-Gi-Oh! Magazine',
-}
-
-enum GrandpaCup {
-  grandpaCupQualifying = 'Qualifying Round',
+	magazine = 'Yu-Gi-Oh! Magazine',
+	grandpaCupQualifying = 'Qualifying Round',
 	grandpaCupFinal = 'Final',
 }
 
@@ -127,18 +118,14 @@ interface ICardData {
 interface IBoosterPackData {
 	id: string;
 	name: string;
-	unlockCondition: string;
-	imgLink: string | URL;
+	unlockCondition?: string;
+	imgLink?: string | URL;
 	cardIds: string[];
 }
 
 interface IContentStorageData {
 	cards: ICardData[];
 	boosterPacks: IBoosterPackData[];
-	starterDecks: IBoosterPackData[];
-	weeklySets: IBoosterPackData[];
-	magazines: IBoosterPackData[];
-	grandpaCupSets: IBoosterPackData[];
 }
 //#endregion
 
@@ -541,31 +528,20 @@ async function pushCardInfo(
 			`Rarity ${cardRarity} is not an accepted Rarity type. Big oops on the devs part. Bad Dev, Bad!`,
 		);
 		return;
-	} 
-  //need to rework, maybe just delete all other 
-  //collections and just go with boosters?
-  let cardData: ;
-  if (Object.values(WeeklyYuGiOh).includes(boosterName as WeeklyYuGiOh)) {
-     cardData = await getCardInfo(cardName, cardURL, cardImgURL,
-      boosterName as WeeklyYuGiOh, cardRarity as Rarity)
-  } else if (Object.values(Magazine).includes(boosterName as Magazine)) {
-
-  } else if (Object.values(GrandpaCup).includes(boosterName as GrandpaCup)) {
-
-  } else if (!Object.values(BoosterPack).includes(boosterName as BoosterPack)) {
-    console.log(
+	} else if (!Object.values(BoosterPack).includes(boosterName as BoosterPack)) {
+		console.log(
 			`BoosterPack ${boosterName} is not an accepted BoosterPack type. Big oops on the devs part. Bad Dev, Bad!`,
 		);
 		return;
-	} else {
-   cardData = await getCardInfo(
-      cardName,
-      cardURL,
-      cardImgURL,
-      boosterName as BoosterPack,
-      cardRarity as Rarity,
-    );
-  }
+	}
+
+	const cardData = await getCardInfo(
+		cardName,
+		cardURL,
+		cardImgURL,
+		boosterName as BoosterPack,
+		cardRarity as Rarity,
+	);
 
 	pageContentStorageData.cards.push(cardData);
 	cardIds.push(cardData.id);
