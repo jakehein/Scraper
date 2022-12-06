@@ -27,9 +27,9 @@ enum BoosterPack {
 	MultiColoredMilleniumPuzzle = 'Multi-colored Millenium Puzzle',
 	weeklyYuGiOh1 = 'Set 1',
 	weeklyYuGiOh2 = 'Set 2',
-	magazine = 'Yu-Gi-Oh! Magazine',
-	grandpaCupQualifying = 'Qualifying Round',
-	grandpaCupFinal = 'Final',
+	Magazine = 'Yu-Gi-Oh! Magazine',
+	GrandpaCupQualifying = 'Qualifying Round',
+	GrandpaCupFinal = 'Final',
 }
 
 enum Rarity {
@@ -156,7 +156,7 @@ const xpathDeckDetails =
 	'//th[contains(text(), "Deck Details")]/../following-sibling::tr/td';
 const xpathFusionMaterials =
 	'//th[contains(text(), "Materials")]/following-sibling::td';
-const xpathWeeklySets =
+const xpathConditionalBoosters =
 	'//*[@id="mw-content-text"]/div[@class="mw-parser-output"]';
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
@@ -456,10 +456,6 @@ function getNewContentStorageDataInstance() {
 	return {
 		cards: [],
 		boosterPacks: [],
-		starterDecks: [],
-		weeklySets: [],
-		magazines: [],
-		grandpaCupSets: [],
 	} as IContentStorageData;
 }
 
@@ -494,11 +490,11 @@ function checkPageToScrape() {
 	if (document.location.href === launcherSpiderBoosterPage) {
 		scrapeLauncherSpiderBoosterPage();
 	} else if (document.location.href === weeklyYuGiOhPage) {
-		scrapeWeeklyYuGiOhPage();
+		scrapeWeeklyAndGrandpaCupYuGiOhPage();
 	} else if (document.location.href === yuGiOhMagazinePage) {
 		scrapeYuGiOhMagazinePage();
 	} else if (document.location.href === grandpaCupPage) {
-		scrapeGrandpaCupPage();
+		scrapeWeeklyAndGrandpaCupYuGiOhPage();
 	} else {
 		scrapeGeneralBoosterPage();
 	}
@@ -549,11 +545,11 @@ async function pushCardInfo(
 
 async function updateContentLocalStorageData(
 	boosterName: string,
-	imgLink: string,
-	unlockCondition: string,
 	cardIds: string[],
 	pageContentStorageData: IContentStorageData,
 	storageContentStorageData: IContentStorageData,
+	imgLink?: string,
+	unlockCondition?: string,
 ) {
 	pageContentStorageData.boosterPacks.push({
 		id: boosterName,
@@ -673,11 +669,11 @@ async function scrapeLauncherSpiderBoosterPage() {
 
 	await updateContentLocalStorageData(
 		boosterName,
-		imgLink,
-		unlockCondition,
 		cardIds,
 		pageContentStorageData,
 		storageContentStorageData,
+		imgLink,
+		unlockCondition,
 	);
 }
 //#endregion
@@ -767,42 +763,52 @@ async function scrapeGeneralBoosterPage() {
 
 	await updateContentLocalStorageData(
 		boosterName,
-		imgLink,
-		unlockCondition,
 		cardIds,
 		pageContentStorageData,
 		storageContentStorageData,
+		imgLink,
+		unlockCondition,
 	);
 }
 //#endregion
 //#endregion
 
-//#region Weekly YuGiOh
-async function scrapeWeeklyYuGiOhPage() {
-	//const name = getHeadingText();
-	//loop over elements
-	const { cardIds, pageContentStorageData, storageContentStorageData } =
+//#region Weekly YuGiOh and Grandpa Cup
+async function scrapeWeeklyAndGrandpaCupYuGiOhPage() {
+	const { pageContentStorageData, storageContentStorageData } =
 		await getCommonVars();
 
-	const weeklySetsCollection = (
-		evaluateElement(document, xpathWeeklySets) as HTMLElement
+	const setsCollection = (
+		evaluateElement(document, xpathConditionalBoosters) as HTMLElement
 	)?.children;
+
+	const isGrandpaCupPage = getBoosterName() === 'Grandpa Cup';
 
 	//get the two sets from the div collection, pruning the bad nodes
 	//there's a more clever way to do this, but i'm tired and don't care
-	for (let i = 3; i < weeklySetsCollection.length - 2; i + 6) {
-		const weeklySet = (
-			weeklySetsCollection.item(i) as HTMLElement
-		).innerText.trim();
-		for (let j = 0; j < 2; j++) {
-			const pElement = weeklySetsCollection.item(i + j + 1);
-			const ulElement = weeklySetsCollection.item(i + j + 2).firstElementChild;
+	for (
+		let i = isGrandpaCupPage ? 2 : 3;
+		i < setsCollection.length - 2;
+		i += 6
+	) {
+		const set = (setsCollection.item(i) as HTMLElement).innerText.trim();
+		const cardIds: string[] = [];
+		console.log(setsCollection);
+		for (let j = 0; j < 4; j += 2) {
+			console.log(
+				setsCollection.item(i + j + 1),
+				setsCollection.item(i + j + 2),
+			);
+			const pElement = setsCollection.item(i + j + 1);
+			const ulElement = isGrandpaCupPage
+				? setsCollection.item(i + j + 2)
+				: setsCollection.item(i + j + 2).firstElementChild;
 			const cardsCollection = ulElement.children;
 
 			if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
 				const cardRarity = (pElement as HTMLElement).innerText.trim();
 				for (let k = 0; k < cardsCollection.length; k++) {
-					const currentCard = cardsCollection.item(j) as HTMLElement;
+					const currentCard = cardsCollection.item(k) as HTMLElement;
 					let cardName = currentCard.innerText.trim();
 					let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
 						?.href;
@@ -812,13 +818,17 @@ async function scrapeWeeklyYuGiOhPage() {
 
 					const cardHasAlternateArtwork =
 						cardName.includes('(Alternate artwork');
-					if (cardHasAlternateArtwork || cardName.includes('(Primary')) {
+					if (
+						cardHasAlternateArtwork ||
+						cardName.includes('(Primary') ||
+						cardName.includes('(Promo')
+					) {
 						cardName = cardName.substring(0, cardName.indexOf(' (')).trim();
 					}
 
 					await pushCardInfo(
 						cardName,
-						weeklySet,
+						set,
 						cardRarity,
 						cardURL,
 						pageContentStorageData,
@@ -828,38 +838,68 @@ async function scrapeWeeklyYuGiOhPage() {
 				}
 			}
 		}
+
+		await updateContentLocalStorageData(
+			set,
+			cardIds,
+			pageContentStorageData,
+			storageContentStorageData,
+		);
 	}
-	//set 1
-	//*[@id="mw-content-text"]/div/h3[1]
-
-	//rare and common
-	//*[@id="mw-content-text"]/div/p[2]
-	//*[@id="mw-content-text"]/div/div[2]
-
-	//*[@id="mw-content-text"]/div/p[3]
-	//*[@id="mw-content-text"]/div/div[3]
-
-	//set 2
-	//*[@id="mw-content-text"]/div/h3[2]
-
-	//rare and common
-	//*[@id="mw-content-text"]/div/p[5]
-	//*[@id="mw-content-text"]/div/div[4]
-	//*[@id="mw-content-text"]/div/p[6]
-	//*[@id="mw-content-text"]/div/div[5]
-
-	console.log('test');
 }
 //#endregion
 
 //#region YuGiOh Magazine
-function scrapeYuGiOhMagazinePage() {
-	console.log('test');
-}
-//#endregion
+async function scrapeYuGiOhMagazinePage() {
+	const { cardIds, pageContentStorageData, storageContentStorageData } =
+		await getCommonVars();
 
-//#region Grandpa Cup
-function scrapeGrandpaCupPage() {
-	console.log('test');
+	const boosterName = getBoosterName();
+	const magazineCollection = (
+		evaluateElement(document, xpathConditionalBoosters) as HTMLElement
+	)?.children;
+
+	for (let j = 1; j < 4; j += 2) {
+		const pElement = magazineCollection.item(j);
+		const ulElement = magazineCollection.item(j + 1);
+		const cardsCollection = ulElement.children;
+
+		console.log(pElement.tagName, ulElement.tagName);
+		if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
+			const cardRarity = (pElement as HTMLElement).innerText.trim();
+			for (let k = 0; k < cardsCollection.length; k++) {
+				const currentCard = cardsCollection.item(k) as HTMLElement;
+				let cardName = currentCard.innerText.trim();
+				let cardURL = (currentCard.firstElementChild as HTMLAnchorElement)
+					?.href;
+				if (cardURL.includes('#')) {
+					cardURL = cardURL.replace(/#/g, '_');
+				}
+
+				const cardHasAlternateArtwork = cardName.includes('(Alternate artwork');
+				if (cardHasAlternateArtwork || cardName.includes('(Primary')) {
+					cardName = cardName.substring(0, cardName.indexOf(' (')).trim();
+				}
+
+				await pushCardInfo(
+					cardName,
+					boosterName,
+					cardRarity,
+					cardURL,
+					pageContentStorageData,
+					cardIds,
+					cardHasAlternateArtwork,
+				);
+			}
+		}
+	}
+
+	await updateContentLocalStorageData(
+		boosterName,
+		cardIds,
+		pageContentStorageData,
+		storageContentStorageData,
+	);
+	//console.log('test');
 }
 //#endregion
