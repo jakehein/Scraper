@@ -5,7 +5,6 @@ const downloadContents = document.getElementById('contents');
 let scrapedContent: IContentStorageData;
 
 window.onload = async () => {
-	console.log('test');
 	scrapedContent = (
 		(await chrome.storage.local.get('ygoKey')) as {
 			ygoKey: IContentStorageData;
@@ -22,8 +21,8 @@ window.onload = async () => {
 		element.innerHTML = `<span>${el}</span>`;
 		boostersRemaining.append(element);
 	});
-	if (!boostersUnscraped.length) {
-		downloadContents.setAttribute('disabled', 'false');
+	if (boostersRemaining.children.length === 1) {
+		(downloadContents as HTMLInputElement).disabled = false;
 	}
 };
 

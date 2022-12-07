@@ -129,7 +129,7 @@ export interface IContentStorageData {
 
 //#region Useful Constants
 const xpathUnlockCondition =
-	'//th[contains(text(), "Introduction")]/../following-sibling::tr/td/p';
+	'//th[contains(text(), "Introduction")]/../following-sibling::tr/td';
 const xpathCardDescriptionEDS =
 	'//b[contains(text(),"Card descriptions")]/..//*/tbody/tr[1]/th/div/i/a[contains(text(),"The Eternal Duelist Soul")]';
 const xpathCardDescription =
@@ -159,7 +159,6 @@ const xpathConditionalBoosters =
 const headingId = '#firstHeading';
 const packSuffix = '(EDS-BP)';
 const packImg = 'div > figure > a.image';
-//const cardImg = 'td.cardtable-cardimage > a.image';
 const packImgLauncherSpider = 'div > aside > figure > a.image';
 const cardDescriptionTd = 'tr:nth-child(3) > td';
 const ygoFandomSite = 'https://yugioh.fandom.com/wiki/';
@@ -168,7 +167,6 @@ const launcherSpiderBoosterPage =
 const weeklyYuGiOhPage = 'https://yugioh.fandom.com/wiki/Weekly_Yu-Gi-Oh!';
 const yuGiOhMagazinePage = 'https://yugioh.fandom.com/wiki/Yu-Gi-Oh!_Magazine';
 const grandpaCupPage = 'https://yugioh.fandom.com/wiki/Grandpa_Cup';
-
 //#endregion
 
 window.onload = async () => {
@@ -176,13 +174,17 @@ window.onload = async () => {
 	button.id = 'scrapePage';
 	button.textContent = 'Scrape Page';
 
-	button.addEventListener('click', () => {
-		checkPageToScrape();
+	createGlassAndLoaderWheel();
+
+	button.addEventListener('click', async () => {
+		glass.style.display = 'block';
+		await checkPageToScrape();
 		disableScraperForPage(button);
+		glass.style.display = 'none';
 	});
 
 	//TODO: TEST, remove this
-	await chrome.storage.local.clear();
+	//await chrome.storage.local.clear();
 
 	checkBoosterPageStorage(button);
 
@@ -214,6 +216,75 @@ window.onload = async () => {
 
 //#region Common Code
 let cardImgDocument: Document;
+let glass: HTMLElement;
+
+function createGlassAndLoaderWheel() {
+	glass = document.createElement('div');
+	glass.id = 'glassContainer';
+
+	glass.style.opacity = '.8';
+	glass.style.backgroundColor = '#fff';
+	glass.style.position = 'fixed';
+	glass.style.width = '100%';
+	glass.style.height = '100%';
+	glass.style.top = '0px';
+	glass.style.left = '0px';
+	glass.style.zIndex = '1000';
+	glass.style.display = 'none';
+	createLoaderWheel();
+
+	document.querySelector('body').append(glass);
+}
+
+function createLoaderWheel() {
+	const loader = document.createElement('div');
+	const animation = document.styleSheets[0];
+
+	loader.style.margin = '100px auto';
+	loader.style.fontSize = '25px';
+	loader.style.width = '1em';
+	loader.style.height = '1em';
+	loader.style.borderRadius = '50%';
+	loader.style.position = 'relative';
+	loader.style.textIndent = '-9999em';
+	loader.style.animationName = 'load5';
+	loader.style.animationDuration = '1.1s';
+	loader.style.animationIterationCount = 'infinite';
+	loader.style.animationTimingFunction = 'ease';
+	loader.style.transform = 'translateZ(0)';
+	animation.insertRule(
+		`@keyframes load5 {
+      0%,
+      100% {
+        box-shadow: 0em -2.6em 0em 0em #000000, 1.8em -1.8em 0 0em rgba(0,0,0, 0.2), 2.5em 0em 0 0em rgba(0,0,0, 0.2), 1.75em 1.75em 0 0em rgba(0,0,0, 0.2), 0em 2.5em 0 0em rgba(0,0,0, 0.2), -1.8em 1.8em 0 0em rgba(0,0,0, 0.2), -2.6em 0em 0 0em rgba(0,0,0, 0.5), -1.8em -1.8em 0 0em rgba(0,0,0, 0.7);
+      }
+      12.5% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.7), 1.8em -1.8em 0 0em #000000, 2.5em 0em 0 0em rgba(0,0,0, 0.2), 1.75em 1.75em 0 0em rgba(0,0,0, 0.2), 0em 2.5em 0 0em rgba(0,0,0, 0.2), -1.8em 1.8em 0 0em rgba(0,0,0, 0.2), -2.6em 0em 0 0em rgba(0,0,0, 0.2), -1.8em -1.8em 0 0em rgba(0,0,0, 0.5);
+      }
+      25% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.5), 1.8em -1.8em 0 0em rgba(0,0,0, 0.7), 2.5em 0em 0 0em #000000, 1.75em 1.75em 0 0em rgba(0,0,0, 0.2), 0em 2.5em 0 0em rgba(0,0,0, 0.2), -1.8em 1.8em 0 0em rgba(0,0,0, 0.2), -2.6em 0em 0 0em rgba(0,0,0, 0.2), -1.8em -1.8em 0 0em rgba(0,0,0, 0.2);
+      }
+      37.5% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.2), 1.8em -1.8em 0 0em rgba(0,0,0, 0.5), 2.5em 0em 0 0em rgba(0,0,0, 0.7), 1.75em 1.75em 0 0em #000000, 0em 2.5em 0 0em rgba(0,0,0, 0.2), -1.8em 1.8em 0 0em rgba(0,0,0, 0.2), -2.6em 0em 0 0em rgba(0,0,0, 0.2), -1.8em -1.8em 0 0em rgba(0,0,0, 0.2);
+      }
+      50% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.2), 1.8em -1.8em 0 0em rgba(0,0,0, 0.2), 2.5em 0em 0 0em rgba(0,0,0, 0.5), 1.75em 1.75em 0 0em rgba(0,0,0, 0.7), 0em 2.5em 0 0em #000000, -1.8em 1.8em 0 0em rgba(0,0,0, 0.2), -2.6em 0em 0 0em rgba(0,0,0, 0.2), -1.8em -1.8em 0 0em rgba(0,0,0, 0.2);
+      }
+      62.5% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.2), 1.8em -1.8em 0 0em rgba(0,0,0, 0.2), 2.5em 0em 0 0em rgba(0,0,0, 0.2), 1.75em 1.75em 0 0em rgba(0,0,0, 0.5), 0em 2.5em 0 0em rgba(0,0,0, 0.7), -1.8em 1.8em 0 0em #000000, -2.6em 0em 0 0em rgba(0,0,0, 0.2), -1.8em -1.8em 0 0em rgba(0,0,0, 0.2);
+      }
+      75% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.2), 1.8em -1.8em 0 0em rgba(0,0,0, 0.2), 2.5em 0em 0 0em rgba(0,0,0, 0.2), 1.75em 1.75em 0 0em rgba(0,0,0, 0.2), 0em 2.5em 0 0em rgba(0,0,0, 0.5), -1.8em 1.8em 0 0em rgba(0,0,0, 0.7), -2.6em 0em 0 0em #000000, -1.8em -1.8em 0 0em rgba(0,0,0, 0.2);
+      }
+      87.5% {
+        box-shadow: 0em -2.6em 0em 0em rgba(0,0,0, 0.2), 1.8em -1.8em 0 0em rgba(0,0,0, 0.2), 2.5em 0em 0 0em rgba(0,0,0, 0.2), 1.75em 1.75em 0 0em rgba(0,0,0, 0.2), 0em 2.5em 0 0em rgba(0,0,0, 0.2), -1.8em 1.8em 0 0em rgba(0,0,0, 0.5), -2.6em 0em 0 0em rgba(0,0,0, 0.7), -1.8em -1.8em 0 0em #000000;
+      }
+    }`,
+	);
+	glass.append(loader);
+	loader.id = 'glass_loader';
+	loader.innerText = 'Loading...';
+}
 
 function evaluateElement(pageDocument: Document, xpath: string) {
 	return pageDocument.evaluate(
@@ -447,7 +518,10 @@ async function getLocalStorage() {
 	return localStorage?.ygoKey;
 }
 
-async function setLocalStorage(contents: IContentStorageData) {
+async function setLocalStorage(
+	boosterName: string,
+	contents: IContentStorageData,
+) {
 	chrome.storage.local.set(
 		{
 			ygoKey: contents,
@@ -456,7 +530,7 @@ async function setLocalStorage(contents: IContentStorageData) {
 			if (chrome.runtime.lastError) {
 				console.error(chrome.runtime.lastError);
 			} else {
-				alert('Page has successfully been scraped!');
+				alert(`${boosterName} has successfully been scraped!`);
 			}
 		},
 	);
@@ -467,17 +541,17 @@ function disableScraperForPage(button: HTMLButtonElement) {
 	button.disabled = true;
 }
 
-function checkPageToScrape() {
+async function checkPageToScrape() {
 	if (document.location.href === launcherSpiderBoosterPage) {
-		scrapeLauncherSpiderBoosterPage();
+		await scrapeLauncherSpiderBoosterPage();
 	} else if (document.location.href === weeklyYuGiOhPage) {
-		scrapeWeeklyAndGrandpaCupYuGiOhPage();
+		await scrapeWeeklyAndGrandpaCupYuGiOhPage();
 	} else if (document.location.href === yuGiOhMagazinePage) {
-		scrapeYuGiOhMagazinePage();
+		await scrapeYuGiOhMagazinePage();
 	} else if (document.location.href === grandpaCupPage) {
-		scrapeWeeklyAndGrandpaCupYuGiOhPage();
+		await scrapeWeeklyAndGrandpaCupYuGiOhPage();
 	} else {
-		scrapeGeneralBoosterPage();
+		await scrapeGeneralBoosterPage();
 	}
 }
 
@@ -544,7 +618,7 @@ async function updateContentLocalStorageData(
 		!storageContentStorageData?.cards?.length &&
 		!storageContentStorageData?.boosterPacks?.length
 	) {
-		setLocalStorage(pageContentStorageData);
+		setLocalStorage(boosterName, pageContentStorageData);
 	} else {
 		const updatedContentStorageData: IContentStorageData = {
 			...storageContentStorageData,
@@ -555,7 +629,7 @@ async function updateContentLocalStorageData(
 				pageContentStorageData.boosterPacks,
 			),
 		};
-		setLocalStorage(updatedContentStorageData);
+		setLocalStorage(boosterName, updatedContentStorageData);
 	}
 }
 
@@ -830,7 +904,6 @@ async function scrapeYuGiOhMagazinePage() {
 		const ulElement = magazineCollection.item(j + 1);
 		const cardsCollection = ulElement.children;
 
-		console.log(pElement.tagName, ulElement.tagName);
 		if (pElement.tagName === 'P' && ulElement.tagName === 'UL') {
 			const cardRarity = (pElement as HTMLElement).innerText.trim();
 			for (let k = 0; k < cardsCollection.length; k++) {
