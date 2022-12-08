@@ -16,7 +16,8 @@
 				"https://yugioh.fandom.com/wiki/*(EDS-BP)",
 				"https://yugioh.fandom.com/wiki/Weekly_Yu-Gi-Oh!",
 				"https://yugioh.fandom.com/wiki/Yu-Gi-Oh!_Magazine",
-				"https://yugioh.fandom.com/wiki/Grandpa_Cup"
+				"https://yugioh.fandom.com/wiki/Grandpa_Cup",
+				"https://yugioh.fandom.com/wiki/Gallery_of_Yu-Gi-Oh!_The_Eternal_Duelist_Soul_cards"
 			],
 			"js": ["content-script.js"],
 			"run_at": "document_end",
