@@ -183,9 +183,6 @@ window.onload = async () => {
 		glass.style.display = 'none';
 	});
 
-	//TODO: TEST, remove this
-	//await chrome.storage.local.clear();
-
 	checkBoosterPageStorage(button);
 
 	document.querySelector(headingId).parentElement.append(button);
@@ -483,7 +480,15 @@ function checkBoosterPageStorage(button: HTMLButtonElement) {
 
 				const isCurrentBoosterScraped =
 					extensionStorage?.ygoKey?.boosterPacks?.find((pack) => {
-						return pack.name === boosterName;
+						return (
+							pack.name === boosterName ||
+							((pack.name === BoosterPack.GrandpaCupFinal ||
+								pack.name === BoosterPack.GrandpaCupQualifying) &&
+								boosterName === 'Grandpa Cup') ||
+							((pack.name === BoosterPack.weeklyYuGiOh1 ||
+								pack.name === BoosterPack.weeklyYuGiOh2) &&
+								boosterName === 'Weekly Yu-Gi-Oh!')
+						);
 					});
 
 				if (isCurrentBoosterScraped) {
