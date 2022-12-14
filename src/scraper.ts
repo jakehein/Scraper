@@ -27,6 +27,8 @@ function performOnload() {
 	});
 	if (boostersRemaining.children.length === 1) {
 		(downloadContents as HTMLInputElement).disabled = false;
+	} else if (!(downloadContents as HTMLInputElement).disabled) {
+		(downloadContents as HTMLInputElement).disabled = true;
 	}
 }
 
